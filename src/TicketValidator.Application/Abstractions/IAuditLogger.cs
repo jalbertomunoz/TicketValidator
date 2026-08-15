@@ -8,7 +8,7 @@ public interface IAuditLogger
     Task LogAsync(
         Guid analysisId,
         ExpenseType expenseType,
-        AnalysisDecision decision,
+        AnalysisDecision? decision,
         TimeSpan duration,
         Exception? error,
         CancellationToken cancellationToken = default);

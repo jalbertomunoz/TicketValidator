@@ -86,7 +86,7 @@ public sealed class AnalyzeTicketHandler
             await _auditLogger.LogAsync(
                 analysisId,
                 command.ExpenseType,
-                decision: null!,
+                decision: null,
                 stopwatch.Elapsed,
                 exception,
                 CancellationToken.None);
