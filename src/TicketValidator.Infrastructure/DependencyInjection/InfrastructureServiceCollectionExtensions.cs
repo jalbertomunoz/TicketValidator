@@ -31,6 +31,7 @@ public static class InfrastructureServiceCollectionExtensions
             return new ChatClient(openAiOptions.Model, openAiOptions.ApiKey);
         });
         services.AddTransient<IAiTicketExtractor, OpenAiTicketExtractor>();
+        services.AddTransient<IProductClassifier, OpenAiProductClassifier>();
 
         return services;
     }
