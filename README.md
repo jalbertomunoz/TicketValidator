@@ -39,3 +39,17 @@ El log contiene el identificador de análisis, tipo de gasto, estado, código de
 motivo, duración y datos básicos de error. No almacena imágenes, OCR completo,
 prompts, respuestas de OpenAI ni secretos. El directorio `logs/` está excluido
 de Git.
+
+## Testing
+
+Ejecutar toda la suite con:
+
+```powershell
+dotnet test
+```
+
+Los tests unitarios no llaman a OpenAI. Los tests de integración habituales
+tampoco consumen la API de OpenAI ni requieren `OPENAI_API_KEY`; las pruebas
+del pipeline y de la API sustituyen las dependencias externas por fakes
+controlados. Las pruebas reales contra OpenAI se ejecutan manualmente y quedan
+fuera de la suite normal.
