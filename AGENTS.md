@@ -465,6 +465,8 @@ El MVP solo contempla:
 
 No implementar inicialmente:
 
+- Corrección fina de inclinación/skew.
+- OpenCV/OpenCvSharp para el preprocesamiento de imagen.
 - Corrección de perspectiva.
 - Filtros avanzados.
 - Restauración.

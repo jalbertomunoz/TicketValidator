@@ -470,11 +470,17 @@ El MVP contempla:
 
 No forma parte del MVP:
 
+- Corrección fina de inclinación/skew.
+- OpenCV/OpenCvSharp para el preprocesamiento de imagen.
 - Corrección de perspectiva.
 - Contraste avanzado.
 - Restauración.
 - Eliminación de ruido.
 - Mejora mediante IA.
+
+El fixture sintético de ticket inclinado se conserva como caso observado de una
+limitación conocida del OCR. No activa corrección fina de inclinación en esta
+versión del MVP.
 
 ---
 
@@ -1348,6 +1354,7 @@ Se evitará:
 
 Quedan fuera de la arquitectura inicial:
 
+- Corrección fina de inclinación/skew.
 - Corrección avanzada de perspectiva.
 - Mejora de contraste.
 - Recorte automático.

@@ -117,7 +117,7 @@ El MVP incluye:
 - Imágenes JPEG.
 - Imágenes PNG.
 - Tipo de gasto.
-- Corrección de orientación/rotación.
+- Corrección de orientación/rotación, sin corrección fina de inclinación/skew.
 - Tesseract OCR.
 - GPT-4.1.
 - Extracción de datos.
@@ -154,6 +154,8 @@ No forman parte del MVP:
 - Entrenamiento de modelos de IA propios.
 - Base de datos funcional de gastos.
 - Persistencia de imágenes.
+- Corrección fina de inclinación/skew.
+- OpenCV/OpenCvSharp para el preprocesamiento de imagen.
 - Corrección avanzada de perspectiva.
 - Restauración de imágenes.
 - Filtros avanzados de contraste.
@@ -1644,6 +1646,18 @@ No manipulación
 
 ---
 
+## CP-18 — Ticket inclinado
+
+El fixture sintético con una inclinación aproximada de 10 grados se conserva
+como caso observado de una limitación conocida del OCR. En las pruebas actuales
+Tesseract no obtiene evidencia textual de ese fixture.
+
+El MVP no aplicará corrección fina de inclinación/skew ni incorporará
+OpenCV/OpenCvSharp para resolver este caso. No se debe completar la evidencia
+ausente mediante IA.
+
+---
+
 # 22. Logging
 
 El MVP utilizará logs en fichero.
@@ -1785,7 +1799,8 @@ Entrada:
 JPEG / PNG
 
 Preprocesamiento:
-Orientación / rotación
+Orientación / rotación, sin corrección fina de inclinación/skew ni
+OpenCV/OpenCvSharp
 
 Documentación API:
 OpenAPI / Swagger UI
@@ -1848,6 +1863,7 @@ Total difícil de leer
 
 Una vez completado el MVP se podrán estudiar:
 
+- Corrección fina de inclinación/skew.
 - Corrección de perspectiva.
 - Recorte automático.
 - Mejora de contraste.
