@@ -8,6 +8,7 @@ using TicketValidator.Application.Services;
 using TicketValidator.Application.UseCases.AnalyzeTicket;
 using TicketValidator.Infrastructure.AI;
 using TicketValidator.Infrastructure.DependencyInjection;
+using TicketValidator.Infrastructure.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +28,7 @@ builder.Services.PostConfigure<OpenAiOptions>(options =>
     options.ApiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? options.ApiKey;
 });
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection("Uploads"));
+builder.Services.Configure<AuditLogOptions>(builder.Configuration.GetSection("AuditLog"));
 builder.Services.AddInfrastructure();
 builder.Services.AddTransient<ITicketVerificationService, TicketVerificationService>();
 builder.Services.AddTransient<IExpenseRuleEngine, ExpenseRuleEngine>();

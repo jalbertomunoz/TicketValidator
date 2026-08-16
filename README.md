@@ -27,3 +27,15 @@ depende del perfil configurado en `launchSettings.json`.
 
 Swagger UI permanece disponible también en Render como interfaz técnica de
 demostración del MVP académico.
+
+## Auditoría en fichero
+
+Cada análisis genera una línea técnica en `logs/ticket-validator.log` por
+defecto, relativa al directorio de ejecución de la aplicación. La sección
+`AuditLog` de `appsettings.json` permite configurar el directorio y el nombre
+del fichero.
+
+El log contiene el identificador de análisis, tipo de gasto, estado, código de
+motivo, duración y datos básicos de error. No almacena imágenes, OCR completo,
+prompts, respuestas de OpenAI ni secretos. El directorio `logs/` está excluido
+de Git.

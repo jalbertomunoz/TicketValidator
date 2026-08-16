@@ -37,7 +37,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddTransient<IProductClassifier, OpenAiProductClassifier>();
         services.AddTransient<IExpenseCoherenceAnalyzer, OpenAiExpenseCoherenceAnalyzer>();
         services.AddTransient<IVisualAnalysisService, OpenAiVisualAnalysisService>();
-        services.AddSingleton<IAuditLogger, NoOpAuditLogger>();
+        services.AddSingleton<IAuditLogger, FileAuditLogger>();
 
         return services;
     }

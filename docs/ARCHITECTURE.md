@@ -1121,6 +1121,11 @@ Sí puede provocar rechazo:
 # 21. Logging
 
 El MVP utilizará logging en fichero.
+`FileAuditLogger` escribe una línea por análisis en una ruta configurable; por
+defecto usa `logs/ticket-validator.log` relativa al directorio de ejecución.
+Las escrituras se serializan dentro del proceso para evitar corrupción del
+fichero. Si la escritura falla, se emite un aviso técnico mediante `ILogger` y
+no se altera la decisión principal.
 
 Datos mínimos:
 
@@ -1135,6 +1140,7 @@ Error
 ```
 
 No se almacenará la imagen del ticket.
+Tampoco se almacenan OCR completo, prompts, respuestas de OpenAI ni secretos.
 
 Tampoco se registrarán:
 
