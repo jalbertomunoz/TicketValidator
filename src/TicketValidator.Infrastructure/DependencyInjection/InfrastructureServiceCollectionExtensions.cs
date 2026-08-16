@@ -3,6 +3,8 @@ using Microsoft.Extensions.Options;
 using OpenAI.Chat;
 using TicketValidator.Application.Abstractions;
 using TicketValidator.Infrastructure.AI;
+using TicketValidator.Infrastructure.ImageProcessing;
+using TicketValidator.Infrastructure.Logging;
 using TicketValidator.Infrastructure.OCR;
 
 namespace TicketValidator.Infrastructure.DependencyInjection;
@@ -19,6 +21,7 @@ public static class InfrastructureServiceCollectionExtensions
         configureTesseract?.Invoke(options);
 
         services.AddSingleton(options);
+        services.AddTransient<IDocumentOrientationService, TesseractDocumentOrientationService>();
         services.AddTransient<IOcrService, TesseractOcrService>();
         services.AddSingleton<ChatClient>(serviceProvider =>
         {
@@ -34,6 +37,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddTransient<IProductClassifier, OpenAiProductClassifier>();
         services.AddTransient<IExpenseCoherenceAnalyzer, OpenAiExpenseCoherenceAnalyzer>();
         services.AddTransient<IVisualAnalysisService, OpenAiVisualAnalysisService>();
+        services.AddSingleton<IAuditLogger, NoOpAuditLogger>();
 
         return services;
     }

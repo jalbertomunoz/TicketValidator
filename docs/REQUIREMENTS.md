@@ -117,7 +117,7 @@ El MVP incluye:
 - Imágenes JPEG.
 - Imágenes PNG.
 - Tipo de gasto.
-- Corrección de orientación/rotación, sin corrección fina de inclinación/skew.
+- Corrección de orientación/rotación 0/90/180/270 mediante Tesseract OSD, sin corrección fina de inclinación/skew.
 - Tesseract OCR.
 - GPT-4.1.
 - Extracción de datos.
@@ -232,6 +232,8 @@ Formatos admitidos:
 image/jpeg
 image/png
 ```
+
+El tamaño máximo de carga se configura mediante `Uploads:MaxFileSizeBytes` y su valor inicial es 10 MB.
 
 ---
 
@@ -452,7 +454,10 @@ El sistema deberá rechazar solicitudes:
 
 ## RF-004 — Orientación
 
-El sistema deberá intentar detectar la orientación del documento antes de realizar OCR.
+El sistema deberá intentar detectar la orientación gruesa 0/90/180/270 mediante
+Tesseract OSD antes de realizar OCR. Si OSD no alcanza confianza técnica
+suficiente (15 como criterio técnico inicial del wrapper), se conservará la
+imagen original. Este umbral no es confianza OCR de negocio.
 
 ---
 
@@ -466,6 +471,9 @@ El sistema deberá poder corregir documentos orientados a:
 180°
 270°
 ```
+
+La corrección no incluye inclinaciones arbitrarias ni skew fino. El fixture de
+ticket inclinado aproximadamente 10 grados permanece como limitación conocida.
 
 ---
 
@@ -648,6 +656,8 @@ No deberán utilizarse como evidencia de alcohol textos pertenecientes a:
 ## RF-027 — Validación del tipo de gasto
 
 El sistema deberá comprobar la coherencia entre los productos comprados y el tipo de gasto indicado.
+
+La IA interpretará la coherencia semántica del conjunto de productos. El motor de reglas decidirá `ERR_TIPO_GASTO_INCOHERENTE` únicamente cuando la señal indique que la mayoría de la compra es claramente incoherente.
 
 ---
 
@@ -1057,6 +1067,8 @@ no deberá interpretarse como un objeto de plástico cuando el contexto indique 
 
 `ERR_TIPO_GASTO_INCOHERENTE` deberá utilizarse cuando la mayoría de la compra sea claramente incompatible con el tipo de gasto.
 
+Cuando existan importes individuales, se valorará preferentemente el peso económico; en caso contrario, el número de líneas.
+
 ---
 
 ## RN-021 — Artículo secundario
@@ -1181,14 +1193,15 @@ Campos iniciales:
 
 ```text
 documentType
-companyName
-companyTaxId
+establishmentName
+establishmentType
+taxId
 invoiceNumber
 date
 time
 total
 address
-vat
+vatDetails
 products
 ```
 
@@ -1214,6 +1227,7 @@ Campos iniciales:
 
 ```text
 ocrReadable
+visualDocumentType
 
 dateMatch
 ocrDate
@@ -1255,21 +1269,23 @@ expenseType
 
 ```json
 {
+  "analysisId": "b6436d26-2368-4cbc-80d9-c1e8cf494909",
   "status": "APPROVED",
   "reasonCode": "OK",
   "message": null,
   "ticket": {
     "documentType": "TICKET",
-    "companyName": "Restaurante Ejemplo",
-    "companyTaxId": "B12345678",
+    "establishmentName": "Restaurante Ejemplo",
+    "taxId": "B12345678",
     "invoiceNumber": null,
-    "date": "14/08/2026",
+    "date": "2026-08-14",
     "time": "14:30",
     "total": 18.50,
     "products": []
   },
   "verification": {
     "ocrReadable": true,
+    "visualDocumentType": "TICKET",
     "dateMatch": true,
     "totalMatch": true,
     "manipulationDetected": false
@@ -1295,8 +1311,8 @@ expenseType
   "verification": {
     "ocrReadable": true,
     "dateMatch": false,
-    "ocrDate": "14/08/2026",
-    "aiDate": "17/08/2026",
+    "ocrDate": "2026-08-14",
+    "visualDate": "2026-08-17",
     "totalMatch": true,
     "manipulationDetected": false
   }

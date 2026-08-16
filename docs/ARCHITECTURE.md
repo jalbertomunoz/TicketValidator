@@ -342,6 +342,7 @@ TicketValidator.Application/
 │   ├── IDocumentOrientationService.cs
 │   ├── ITicketVerificationService.cs
 │   ├── IExpenseRuleEngine.cs
+│   ├── IExpenseCoherenceAnalyzer.cs
 │   └── IAuditLogger.cs
 │
 ├── UseCases/
@@ -355,6 +356,7 @@ TicketValidator.Application/
 │   ├── OcrWord.cs
 │   ├── AiTicketExtraction.cs
 │   ├── VisualAnalysisResult.cs
+│   ├── ExpenseCoherenceResult.cs
 │   └── VerificationResult.cs
 │
 └── Services/
@@ -375,6 +377,7 @@ IVisualAnalysisService
 IDocumentOrientationService
 ITicketVerificationService
 IExpenseRuleEngine
+IExpenseCoherenceAnalyzer
 IAuditLogger
 ```
 
@@ -472,6 +475,12 @@ El MVP contempla:
 270°
 ```
 
+La implementación `TesseractDocumentOrientationService` ejecuta Tesseract OSD
+con `osd.traineddata` y `PageSegMode.OsdOnly`. Solo rota cuando la confianza
+técnica de OSD alcanza 15, valor recomendado por el wrapper como razonablemente
+confiable. Este valor no forma parte de la evidencia OCR ni de las reglas de
+negocio.
+
 No forma parte del MVP:
 
 - Corrección fina de inclinación/skew.
@@ -531,6 +540,8 @@ IA visual fecha:
 ## 6.9 IExpenseRuleEngine
 
 Responsable de ejecutar las reglas y determinar el resultado final.
+
+La coherencia semántica se obtiene previamente mediante `IExpenseCoherenceAnalyzer`. El motor recibe esa señal y decide de forma determinista `ERR_TIPO_GASTO_INCOHERENTE` solo cuando la mayoría de la compra es claramente incoherente.
 
 La IA nunca selecciona directamente:
 
@@ -795,7 +806,7 @@ TicketValidator.Infrastructure/
 │       └── VisualAnalysisPrompt.cs
 │
 ├── ImageProcessing/
-│   └── DocumentOrientationService.cs
+│   └── TesseractDocumentOrientationService.cs
 │
 ├── Logging/
 │   └── FileAuditLogger.cs

@@ -1,0 +1,178 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using TicketValidator.Api.Configuration;
+using TicketValidator.Api.Contracts;
+using TicketValidator.Application.UseCases.AnalyzeTicket;
+using TicketValidator.Domain.Enums;
+using TicketValidator.Domain.Models;
+
+namespace TicketValidator.Api.Controllers;
+
+[ApiController]
+[Route("api/v1/tickets")]
+public sealed class TicketsController : ControllerBase
+{
+    private static readonly byte[] JpegSignature = [0xFF, 0xD8, 0xFF];
+    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    private static readonly HashSet<string> SupportedContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/jpeg",
+        "image/png"
+    };
+
+    private readonly AnalyzeTicketHandler _handler;
+    private readonly UploadOptions _uploadOptions;
+
+    public TicketsController(AnalyzeTicketHandler handler, IOptions<UploadOptions> uploadOptions)
+    {
+        _handler = handler ?? throw new ArgumentNullException(nameof(handler));
+        _uploadOptions = uploadOptions?.Value ?? throw new ArgumentNullException(nameof(uploadOptions));
+    }
+
+    [HttpPost("analyze")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(AnalyzeTicketResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<AnalyzeTicketResponse>> AnalyzeAsync(
+        [FromForm] AnalyzeTicketRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid || request is null || !Enum.IsDefined(request.ExpenseType) || request.ExpenseType == ExpenseType.Unknown)
+        {
+            return BadRequest("El tipo de gasto no es válido.");
+        }
+
+        var file = request.File;
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest("Debe adjuntarse una imagen no vacía.");
+        }
+
+        if (file.Length > _uploadOptions.MaxFileSizeBytes)
+        {
+            return BadRequest($"La imagen supera el límite de {_uploadOptions.MaxFileSizeBytes} bytes.");
+        }
+
+        if (!SupportedContentTypes.Contains(file.ContentType))
+        {
+            return BadRequest("El archivo debe ser una imagen JPEG o PNG.");
+        }
+
+        byte[] image;
+        await using (var stream = new MemoryStream())
+        {
+            await file.CopyToAsync(stream, cancellationToken);
+            image = stream.ToArray();
+        }
+
+        if (!HasExpectedSignature(image, file.ContentType))
+        {
+            return BadRequest("El contenido del archivo no coincide con el formato indicado.");
+        }
+
+        var result = await _handler.HandleAsync(
+            new AnalyzeTicketCommand(image, request.ExpenseType),
+            cancellationToken);
+
+        return Ok(MapResponse(result));
+    }
+
+    private static bool HasExpectedSignature(byte[] image, string contentType) =>
+        contentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase)
+            ? image.AsSpan().StartsWith(JpegSignature)
+            : contentType.Equals("image/png", StringComparison.OrdinalIgnoreCase)
+                && image.AsSpan().StartsWith(PngSignature);
+
+    private static AnalyzeTicketResponse MapResponse(AnalyzeTicketResult result) => new()
+    {
+        AnalysisId = result.AnalysisId,
+        Status = MapStatus(result.Decision.Status),
+        ReasonCode = MapReasonCode(result.Decision.ReasonCode),
+        Message = result.Decision.Message,
+        Ticket = MapTicket(result.Ticket),
+        Verification = MapVerification(result.Verification)
+    };
+
+    private static TicketResponse MapTicket(TicketData ticket) => new()
+    {
+        DocumentType = MapDocumentType(ticket.DocumentType),
+        EstablishmentName = ticket.EstablishmentName,
+        EstablishmentType = ticket.EstablishmentType?.ToString(),
+        Address = ticket.Address is null ? null : new AddressResponse
+        {
+            Street = ticket.Address.Street,
+            City = ticket.Address.City,
+            PostalCode = ticket.Address.PostalCode,
+            Country = ticket.Address.Country
+        },
+        TaxId = ticket.TaxId,
+        InvoiceNumber = ticket.InvoiceNumber,
+        Date = ticket.Date,
+        Time = ticket.Time,
+        Total = ticket.Total,
+        Products = ticket.Products.Select(product => new ProductResponse
+        {
+            OcrText = product.OcrText,
+            NormalizedText = product.NormalizedText,
+            Amount = product.Amount,
+            Category = product.Category?.ToString(),
+            IsAlcohol = product.IsAlcohol
+        }).ToArray(),
+        VatDetails = ticket.VatDetails.Select(vat => new VatResponse
+        {
+            Rate = vat.Rate,
+            TaxableAmount = vat.TaxableAmount,
+            Amount = vat.Amount
+        }).ToArray()
+    };
+
+    private static VerificationResponse MapVerification(VerificationData verification) => new()
+    {
+        OcrReadable = verification.OcrReadable,
+        VisualDocumentType = MapDocumentType(verification.VisualDocumentType),
+        DateMatch = verification.DateMatch,
+        OcrDate = verification.OcrDate,
+        VisualDate = verification.VisualDate,
+        TotalMatch = verification.TotalMatch,
+        OcrTotal = verification.OcrTotal,
+        VisualTotal = verification.VisualTotal,
+        ManipulationDetected = verification.ManipulationDetected
+    };
+
+    private static string MapStatus(AnalysisStatus status) => status switch
+    {
+        AnalysisStatus.Approved => "APPROVED",
+        AnalysisStatus.Rejected => "REJECTED",
+        AnalysisStatus.ReviewRequired => "REVIEW_REQUIRED",
+        AnalysisStatus.Unreadable => "UNREADABLE",
+        AnalysisStatus.ProcessingError => "PROCESSING_ERROR",
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
+    };
+
+    private static string MapReasonCode(ReasonCode reasonCode) => reasonCode switch
+    {
+        ReasonCode.Ok => "OK",
+        ReasonCode.ErrNoDocumento => "ERR_NO_DOCUMENTO",
+        ReasonCode.ErrNoLegible => "ERR_NO_LEGIBLE",
+        ReasonCode.ErrDocumentoManipulado => "ERR_DOCUMENTO_MANIPULADO",
+        ReasonCode.ErrBebidaAlcoholica => "ERR_BEBIDA_ALCOHOLICA",
+        ReasonCode.ErrTipoGastoIncoherente => "ERR_TIPO_GASTO_INCOHERENTE",
+        ReasonCode.ErrSinTotal => "ERR_SIN_TOTAL",
+        ReasonCode.ErrSinFecha => "ERR_SIN_FECHA",
+        ReasonCode.DocumentTypeMismatch => "DOCUMENT_TYPE_MISMATCH",
+        ReasonCode.DateMismatch => "DATE_MISMATCH",
+        ReasonCode.TotalMismatch => "TOTAL_MISMATCH",
+        ReasonCode.OcrLowConfidence => "OCR_LOW_CONFIDENCE",
+        _ => throw new ArgumentOutOfRangeException(nameof(reasonCode), reasonCode, null)
+    };
+
+    private static string? MapDocumentType(DocumentType? documentType) => documentType switch
+    {
+        DocumentType.Receipt => "TICKET",
+        DocumentType.Invoice => "FACTURA",
+        DocumentType.NotDocument => "NO_DOCUMENTO",
+        DocumentType.Unknown => "UNKNOWN",
+        null => null,
+        _ => throw new ArgumentOutOfRangeException(nameof(documentType), documentType, null)
+    };
+}

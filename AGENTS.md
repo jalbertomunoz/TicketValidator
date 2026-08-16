@@ -463,6 +463,9 @@ El MVP solo contempla:
 - Detección de orientación.
 - Rotación.
 
+La orientación gruesa 0/90/180/270 se realizará mediante Tesseract OSD. El
+ticket inclinado aproximadamente 10 grados permanece como limitación conocida.
+
 No implementar inicialmente:
 
 - Corrección fina de inclinación/skew.

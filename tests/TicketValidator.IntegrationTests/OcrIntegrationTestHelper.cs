@@ -9,13 +9,18 @@ internal static class OcrIntegrationTestHelper
     public static async Task<OcrResult> ReadFixtureAsync(string fixtureName)
     {
         var fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Ocr", fixtureName);
+        return await ReadImageAsync(await File.ReadAllBytesAsync(fixturePath));
+    }
+
+    public static Task<OcrResult> ReadImageAsync(byte[] image)
+    {
         var tessdataPath = Path.Combine(AppContext.BaseDirectory, "tessdata");
         var service = new TesseractOcrService(new TesseractOcrOptions
         {
             TessdataPath = tessdataPath
         });
 
-        return await service.ReadAsync(await File.ReadAllBytesAsync(fixturePath));
+        return service.ReadAsync(image);
     }
 
     public static void WriteObservation(ITestOutputHelper output, string fixtureName, OcrResult result)
