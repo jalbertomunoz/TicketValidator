@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using TicketValidator.Application.Abstractions;
+using TicketValidator.Application.DTOs;
+using TicketValidator.Domain.Models;
 
 namespace TicketValidator.Application.UseCases.AnalyzeTicket;
 
@@ -8,6 +10,7 @@ public sealed class AnalyzeTicketHandler
     private readonly IDocumentOrientationService _documentOrientationService;
     private readonly IOcrService _ocrService;
     private readonly IAiTicketExtractor _aiTicketExtractor;
+    private readonly IProductClassifier _productClassifier;
     private readonly IVisualAnalysisService _visualAnalysisService;
     private readonly ITicketVerificationService _ticketVerificationService;
     private readonly IExpenseRuleEngine _expenseRuleEngine;
@@ -17,6 +20,7 @@ public sealed class AnalyzeTicketHandler
         IDocumentOrientationService documentOrientationService,
         IOcrService ocrService,
         IAiTicketExtractor aiTicketExtractor,
+        IProductClassifier productClassifier,
         IVisualAnalysisService visualAnalysisService,
         ITicketVerificationService ticketVerificationService,
         IExpenseRuleEngine expenseRuleEngine,
@@ -25,6 +29,7 @@ public sealed class AnalyzeTicketHandler
         _documentOrientationService = documentOrientationService;
         _ocrService = ocrService;
         _aiTicketExtractor = aiTicketExtractor;
+        _productClassifier = productClassifier;
         _visualAnalysisService = visualAnalysisService;
         _ticketVerificationService = ticketVerificationService;
         _expenseRuleEngine = expenseRuleEngine;
@@ -50,16 +55,19 @@ public sealed class AnalyzeTicketHandler
 
             var extractionTask = _aiTicketExtractor.ExtractAsync(ocrResult.RawText, cancellationToken);
             var visualAnalysisTask = _visualAnalysisService.AnalyzeAsync(orientedImage, cancellationToken);
-            await Task.WhenAll(extractionTask, visualAnalysisTask);
+            var classificationTask = ClassifyProductsAsync(extractionTask, cancellationToken);
+            await Task.WhenAll(classificationTask, visualAnalysisTask);
 
             var aiExtraction = await extractionTask;
+            var classifiedTicket = WithProducts(aiExtraction.Ticket, await classificationTask);
+            var classifiedExtraction = new AiTicketExtraction { Ticket = classifiedTicket };
             var visualAnalysis = await visualAnalysisTask;
             var verificationResult = _ticketVerificationService.Verify(
                 ocrResult,
-                aiExtraction,
+                classifiedExtraction,
                 visualAnalysis);
             var decision = _expenseRuleEngine.Evaluate(
-                aiExtraction.Ticket,
+                classifiedTicket,
                 verificationResult.Verification,
                 command.ExpenseType);
 
@@ -75,7 +83,7 @@ public sealed class AnalyzeTicketHandler
             return new AnalyzeTicketResult
             {
                 AnalysisId = analysisId,
-                Ticket = aiExtraction.Ticket,
+                Ticket = classifiedTicket,
                 Verification = verificationResult.Verification,
                 Decision = decision
             };
@@ -93,4 +101,27 @@ public sealed class AnalyzeTicketHandler
             throw;
         }
     }
+
+    private async Task<IReadOnlyList<ProductData>> ClassifyProductsAsync(
+        Task<AiTicketExtraction> extractionTask,
+        CancellationToken cancellationToken)
+    {
+        var extraction = await extractionTask;
+        return await _productClassifier.ClassifyAsync(extraction.Ticket.Products, cancellationToken);
+    }
+
+    private static TicketData WithProducts(TicketData ticket, IReadOnlyList<ProductData> products) => new()
+    {
+        DocumentType = ticket.DocumentType,
+        EstablishmentName = ticket.EstablishmentName,
+        EstablishmentType = ticket.EstablishmentType,
+        Address = ticket.Address,
+        TaxId = ticket.TaxId,
+        InvoiceNumber = ticket.InvoiceNumber,
+        Date = ticket.Date,
+        Time = ticket.Time,
+        Total = ticket.Total,
+        Products = products,
+        VatDetails = ticket.VatDetails
+    };
 }

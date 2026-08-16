@@ -43,14 +43,91 @@ public sealed class AnalyzeTicketHandlerTests
         Assert.Equal(1, fakes.Orientation.CallCount);
         Assert.Equal(1, fakes.Ocr.CallCount);
         Assert.Equal(1, fakes.Extractor.CallCount);
+        Assert.Equal(1, fakes.ProductClassifier.CallCount);
         Assert.Equal(1, fakes.VisualAnalysis.CallCount);
         Assert.Equal(1, fakes.Verification.CallCount);
         Assert.Equal(1, fakes.RuleEngine.CallCount);
         Assert.Single(fakes.AuditLogger.Entries);
         Assert.Null(fakes.AuditLogger.Entries[0].Error);
-        Assert.Same(expectedTicket, result.Ticket);
+        Assert.NotSame(expectedTicket, result.Ticket);
+        Assert.Equal("Restaurant", result.Ticket.EstablishmentName);
         Assert.Same(expectedVerification, result.Verification);
         Assert.Same(expectedDecision, result.Decision);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PassesClassifiedProductsToRuleEngine()
+    {
+        var extractedProduct = new ProductData { OcrText = "CERVEZA", NormalizedText = "Cerveza", Amount = 3m };
+        var classifiedProduct = new ProductData
+        {
+            OcrText = "CERVEZA",
+            NormalizedText = "Cerveza",
+            Amount = 3m,
+            IsAlcohol = true
+        };
+        var fakes = new HandlerFakes
+        {
+            AiExtraction = new AiTicketExtraction
+            {
+                Ticket = new TicketData { Products = [extractedProduct] }
+            },
+            ClassifiedProducts = [classifiedProduct]
+        };
+
+        await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
+
+        var product = Assert.Single(fakes.RuleEngine.ReceivedTicket!.Products);
+        Assert.Same(classifiedProduct, product);
+        Assert.True(product.IsAlcohol);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ReturnsTicketWithClassifiedProducts()
+    {
+        var classifiedProduct = new ProductData
+        {
+            OcrText = "AGUA",
+            NormalizedText = "Agua",
+            Amount = 2.50m,
+            IsAlcohol = false
+        };
+        var fakes = new HandlerFakes
+        {
+            AiExtraction = new AiTicketExtraction
+            {
+                Ticket = new TicketData
+                {
+                    EstablishmentName = "Restaurant",
+                    Total = 2.50m,
+                    Products = [new ProductData { OcrText = "AGUA" }]
+                }
+            },
+            ClassifiedProducts = [classifiedProduct]
+        };
+
+        var result = await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
+
+        var product = Assert.Single(result.Ticket.Products);
+        Assert.Same(classifiedProduct, product);
+        Assert.Equal("Restaurant", result.Ticket.EstablishmentName);
+        Assert.Equal(2.50m, result.Ticket.Total);
+    }
+
+    [Fact]
+    public async Task HandleAsync_AllowsAnEmptyProductCollection()
+    {
+        var fakes = new HandlerFakes
+        {
+            AiExtraction = new AiTicketExtraction { Ticket = new TicketData { Products = [] } },
+            ClassifiedProducts = []
+        };
+
+        var result = await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
+
+        Assert.Equal(1, fakes.ProductClassifier.CallCount);
+        Assert.Empty(fakes.ProductClassifier.ReceivedProducts!);
+        Assert.Empty(result.Ticket.Products);
     }
 
     [Fact]
@@ -101,6 +178,57 @@ public sealed class AnalyzeTicketHandlerTests
         Assert.Same(expectedException, fakes.AuditLogger.Entries[0].Error);
     }
 
+    [Fact]
+    public async Task HandleAsync_RethrowsAndAudits_WhenProductClassificationFails()
+    {
+        var expectedException = new InvalidOperationException("Product classification failed.");
+        var fakes = new HandlerFakes();
+        fakes.ProductClassifier.Handler = (_, _) => Task.FromException<IReadOnlyList<ProductData>>(expectedException);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals)));
+
+        Assert.Same(expectedException, exception);
+        Assert.Single(fakes.AuditLogger.Entries);
+        Assert.Same(expectedException, fakes.AuditLogger.Entries[0].Error);
+    }
+
+    [Fact]
+    public async Task HandleAsync_StartsProductClassificationWhileVisualAnalysisIsPending()
+    {
+        var extractionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var visualStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var extractionCompletion = new TaskCompletionSource<AiTicketExtraction>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var visualCompletion = new TaskCompletionSource<VisualAnalysisResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var classificationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fakes = new HandlerFakes();
+        fakes.Extractor.Handler = async (_, _) =>
+        {
+            extractionStarted.TrySetResult();
+            return await extractionCompletion.Task;
+        };
+        fakes.VisualAnalysis.Handler = async (_, _) =>
+        {
+            visualStarted.TrySetResult();
+            return await visualCompletion.Task;
+        };
+        fakes.ProductClassifier.Handler = (_, _) =>
+        {
+            classificationStarted.TrySetResult();
+            return Task.FromResult<IReadOnlyList<ProductData>>([]);
+        };
+
+        var handlingTask = fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
+        await Task.WhenAll(extractionStarted.Task, visualStarted.Task);
+        extractionCompletion.SetResult(new AiTicketExtraction());
+        await classificationStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.False(visualCompletion.Task.IsCompleted);
+
+        visualCompletion.SetResult(new VisualAnalysisResult());
+        await handlingTask;
+    }
+
     private sealed class HandlerFakes
     {
         public OrientationFake Orientation { get; } = new();
@@ -108,6 +236,8 @@ public sealed class AnalyzeTicketHandlerTests
         public OcrFake Ocr { get; } = new();
 
         public AiExtractorFake Extractor { get; } = new();
+
+        public ProductClassifierFake ProductClassifier { get; } = new();
 
         public VisualAnalysisFake VisualAnalysis { get; } = new();
 
@@ -127,6 +257,11 @@ public sealed class AnalyzeTicketHandlerTests
             set => Extractor.Result = value;
         }
 
+        public IReadOnlyList<ProductData> ClassifiedProducts
+        {
+            set => ProductClassifier.Result = value;
+        }
+
         public VerificationResult VerificationResult
         {
             set => Verification.Result = value;
@@ -141,6 +276,7 @@ public sealed class AnalyzeTicketHandlerTests
             Orientation,
             Ocr,
             Extractor,
+            ProductClassifier,
             VisualAnalysis,
             Verification,
             RuleEngine,
@@ -203,6 +339,26 @@ public sealed class AnalyzeTicketHandlerTests
         }
     }
 
+    private sealed class ProductClassifierFake : IProductClassifier
+    {
+        public int CallCount { get; private set; }
+
+        public IReadOnlyList<ProductData> Result { get; set; } = [];
+
+        public IReadOnlyList<ProductData>? ReceivedProducts { get; private set; }
+
+        public Func<IReadOnlyList<ProductData>, CancellationToken, Task<IReadOnlyList<ProductData>>>? Handler { get; set; }
+
+        public Task<IReadOnlyList<ProductData>> ClassifyAsync(
+            IReadOnlyList<ProductData> products,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            ReceivedProducts = products;
+            return Handler?.Invoke(products, cancellationToken) ?? Task.FromResult(Result);
+        }
+    }
+
     private sealed class VerificationFake : ITicketVerificationService
     {
         public int CallCount { get; private set; }
@@ -225,12 +381,15 @@ public sealed class AnalyzeTicketHandlerTests
 
         public AnalysisDecision Result { get; set; } = new();
 
+        public TicketData? ReceivedTicket { get; private set; }
+
         public AnalysisDecision Evaluate(
             TicketData ticket,
             VerificationData verification,
             ExpenseType expenseType)
         {
             CallCount++;
+            ReceivedTicket = ticket;
             return Result;
         }
     }
