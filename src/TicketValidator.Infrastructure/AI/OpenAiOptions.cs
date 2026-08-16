@@ -1,4 +1,4 @@
-namespace TicketValidator.Api.Configuration;
+namespace TicketValidator.Infrastructure.AI;
 
 public sealed class OpenAiOptions
 {

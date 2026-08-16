@@ -1,4 +1,4 @@
-using TicketValidator.Api.Configuration;
+using TicketValidator.Infrastructure.AI;
 
 var builder = WebApplication.CreateBuilder(args);
 
