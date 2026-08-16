@@ -19,6 +19,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="Fixtures\Ocr\*.jpg;Fixtures\Ocr\*.jpeg;Fixtures\Ocr\*.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\TicketValidator.Api\TicketValidator.Api.csproj" />
     <ProjectReference Include="..\..\src\TicketValidator.Infrastructure\TicketValidator.Infrastructure.csproj" />
   </ItemGroup>
