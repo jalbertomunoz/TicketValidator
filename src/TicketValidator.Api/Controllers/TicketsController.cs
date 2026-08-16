@@ -19,6 +19,12 @@ public sealed class TicketsController : ControllerBase
         "image/jpeg",
         "image/png"
     };
+    private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg",
+        ".jpeg",
+        ".png"
+    };
 
     private readonly AnalyzeTicketHandler _handler;
     private readonly UploadOptions _uploadOptions;
@@ -63,6 +69,16 @@ public sealed class TicketsController : ControllerBase
             return BadRequest("El archivo debe ser una imagen JPEG o PNG.");
         }
 
+        if (!SupportedExtensions.Contains(Path.GetExtension(file.FileName)))
+        {
+            return BadRequest("La extensión del archivo debe ser .jpg, .jpeg o .png.");
+        }
+
+        if (!HasExpectedContentTypeForExtension(file.FileName, file.ContentType))
+        {
+            return BadRequest("La extensión del archivo no corresponde con el tipo MIME indicado.");
+        }
+
         byte[] image;
         await using (var stream = new MemoryStream())
         {
@@ -87,6 +103,11 @@ public sealed class TicketsController : ControllerBase
             ? image.AsSpan().StartsWith(JpegSignature)
             : contentType.Equals("image/png", StringComparison.OrdinalIgnoreCase)
                 && image.AsSpan().StartsWith(PngSignature);
+
+    private static bool HasExpectedContentTypeForExtension(string fileName, string contentType) =>
+        Path.GetExtension(fileName).Equals(".png", StringComparison.OrdinalIgnoreCase)
+            ? contentType.Equals("image/png", StringComparison.OrdinalIgnoreCase)
+            : contentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase);
 
     private static AnalyzeTicketResponse MapResponse(AnalyzeTicketResult result) => new()
     {

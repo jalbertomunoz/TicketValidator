@@ -229,8 +229,7 @@ Obligatorio.
 Formatos admitidos:
 
 ```text
-image/jpeg
-image/png
+Extensiones: .jpg y .jpeg con image/jpeg; .png con image/png
 ```
 
 El tamaño máximo de carga se configura mediante `Uploads:MaxFileSizeBytes` y su valor inicial es 10 MB.

@@ -21,7 +21,7 @@ depende del perfil configurado en `launchSettings.json`.
 
 1. Abrir `POST /api/v1/tickets/analyze`.
 2. Seleccionar **Try it out**.
-3. Elegir una imagen JPEG o PNG en `file`.
+3. Elegir una imagen `.jpg`, `.jpeg` o `.png` en `file`.
 4. Indicar el `expenseType`.
 5. Ejecutar la petición con **Execute**.
 
