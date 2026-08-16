@@ -289,11 +289,11 @@ ocrReadable
 
 dateMatch
 ocrDate
-aiDate
+visualDate
 
 totalMatch
 ocrTotal
-aiTotal
+visualTotal
 
 manipulationDetected
 ```
@@ -434,12 +434,15 @@ AiTicketExtraction
 La IA deberá devolver `null` cuando un dato no pueda identificarse con suficiente seguridad.
 
 No debe completar datos ausentes.
+Sus fechas y totales estructurados no constituyen una segunda fuente independiente para la verificación.
 
 ---
 
 ## 6.6 IVisualAnalysisService
 
 Responsable del análisis visual limitado del MVP.
+
+Además de los indicios de manipulación, realiza una lectura independiente de fecha y total directamente desde la imagen para contrastarlos con OCR.
 
 Analizará posibles indicios de:
 
@@ -486,7 +489,7 @@ versión del MVP.
 
 ## 6.8 ITicketVerificationService
 
-Responsable de comparar la evidencia OCR y la interpretación IA.
+Responsable de comparar la evidencia OCR con la lectura independiente de la IA visual.
 
 Campos críticos iniciales:
 
@@ -503,7 +506,7 @@ Ejemplo:
 OCR fecha:
 14/08/2026
 
-IA fecha:
+IA visual fecha:
 14/08/2026
 
 → Match
@@ -515,7 +518,7 @@ Ejemplo:
 OCR fecha:
 14/08/2026
 
-IA fecha:
+IA visual fecha:
 17/08/2026
 
 → DATE_MISMATCH
@@ -674,6 +677,7 @@ OpenAiTicketExtractor
 La entrada de esta operación será principalmente texto.
 
 Esta llamada no debe realizar análisis visual del documento.
+Su fecha y total estructurados no se usan como segunda fuente de verificación.
 
 ---
 
@@ -691,7 +695,7 @@ implementado por:
 OpenAiVisualAnalysisService
 ```
 
-Esta operación tendrá un prompt específico dedicado a detectar indicios visibles de manipulación.
+Esta operación analizará indicios visibles de manipulación y leerá fecha y total directamente desde la imagen para compararlos con OCR.
 
 No debe extraer productos ni aplicar reglas de gasto.
 
@@ -781,6 +785,7 @@ TicketValidator.Infrastructure/
 │   └── TesseractOcrService.cs
 │
 ├── AI/
+│   ├── OpenAiOptions.cs
 │   ├── OpenAiTicketExtractor.cs
 │   ├── OpenAiVisualAnalysisService.cs
 │   └── Prompts/
@@ -894,7 +899,6 @@ TicketValidator.Api/
 │   └── GlobalExceptionMiddleware.cs
 │
 ├── Configuration/
-│   ├── OpenAiOptions.cs
 │   ├── OcrOptions.cs
 │   └── ValidationOptions.cs
 │

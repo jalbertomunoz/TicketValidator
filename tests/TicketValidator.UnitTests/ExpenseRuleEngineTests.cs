@@ -145,10 +145,10 @@ public sealed class ExpenseRuleEngineTests
         OcrReadable = ocrReadable,
         DateMatch = dateMatch,
         OcrDate = includeOcrDate ? new DateOnly(2026, 8, 15) : null,
-        AiDate = new DateOnly(2026, 8, 15),
+        VisualDate = new DateOnly(2026, 8, 15),
         TotalMatch = totalMatch,
         OcrTotal = ocrTotal,
-        AiTotal = 12.50m,
+        VisualTotal = 12.50m,
         ManipulationDetected = manipulationDetected
     };
 }

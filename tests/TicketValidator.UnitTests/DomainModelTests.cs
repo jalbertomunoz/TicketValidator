@@ -69,29 +69,29 @@ public sealed class DomainModelTests
     }
 
     [Fact]
-    public void VerificationData_CanRepresentOcrAndAiEvidence()
+    public void VerificationData_CanRepresentOcrAndVisualEvidence()
     {
         var ocrDate = new DateOnly(2026, 8, 15);
-        var aiDate = new DateOnly(2026, 8, 16);
+        var visualDate = new DateOnly(2026, 8, 16);
         var verification = new VerificationData
         {
             OcrReadable = true,
             DateMatch = false,
             OcrDate = ocrDate,
-            AiDate = aiDate,
+            VisualDate = visualDate,
             TotalMatch = true,
             OcrTotal = 18.50m,
-            AiTotal = 18.50m,
+            VisualTotal = 18.50m,
             ManipulationDetected = false
         };
 
         Assert.True(verification.OcrReadable);
         Assert.False(verification.DateMatch);
         Assert.Equal(ocrDate, verification.OcrDate);
-        Assert.Equal(aiDate, verification.AiDate);
+        Assert.Equal(visualDate, verification.VisualDate);
         Assert.True(verification.TotalMatch);
         Assert.Equal(18.50m, verification.OcrTotal);
-        Assert.Equal(18.50m, verification.AiTotal);
+        Assert.Equal(18.50m, verification.VisualTotal);
         Assert.False(verification.ManipulationDetected);
     }
 }

@@ -38,8 +38,8 @@ public sealed class TicketVerificationService : ITicketVerificationService
         var evidenceText = GetEvidenceText(ocrResult);
         var ocrDate = FindOcrDate(evidenceText);
         var ocrTotal = FindOcrTotal(evidenceText);
-        var aiDate = aiExtraction.Ticket.Date;
-        var aiTotal = aiExtraction.Ticket.Total;
+        var visualDate = visualAnalysis.VisualDate;
+        var visualTotal = visualAnalysis.VisualTotal;
 
         return new VerificationResult
         {
@@ -47,12 +47,12 @@ public sealed class TicketVerificationService : ITicketVerificationService
             {
                 OcrReadable = !string.IsNullOrWhiteSpace(ocrResult.RawText)
                     || ocrResult.Words.Any(word => !string.IsNullOrWhiteSpace(word.Text)),
-                DateMatch = ocrDate is not null && aiDate is not null ? ocrDate == aiDate : null,
+                DateMatch = ocrDate is not null && visualDate is not null ? ocrDate == visualDate : null,
                 OcrDate = ocrDate,
-                AiDate = aiDate,
-                TotalMatch = ocrTotal is not null && aiTotal is not null ? ocrTotal == aiTotal : null,
+                VisualDate = visualDate,
+                TotalMatch = ocrTotal is not null && visualTotal is not null ? ocrTotal == visualTotal : null,
                 OcrTotal = ocrTotal,
-                AiTotal = aiTotal,
+                VisualTotal = visualTotal,
                 ManipulationDetected = visualAnalysis.ManipulationDetected
             }
         };

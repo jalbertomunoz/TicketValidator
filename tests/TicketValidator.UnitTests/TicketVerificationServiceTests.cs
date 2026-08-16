@@ -9,17 +9,17 @@ public sealed class TicketVerificationServiceTests
     private readonly TicketVerificationService _service = new();
 
     [Fact]
-    public void Verify_SetsDateMatchTrue_WhenOcrAndAiDatesAreEqual()
+    public void Verify_SetsDateMatchTrue_WhenOcrAndVisualDatesAreEqual()
     {
-        var result = Verify("FECHA: 15/08/2026", date: new DateOnly(2026, 8, 15));
+        var result = Verify("FECHA: 15/08/2026", visualDate: new DateOnly(2026, 8, 15));
 
         Assert.True(result.Verification.DateMatch);
     }
 
     [Fact]
-    public void Verify_SetsDateMatchFalse_WhenOcrAndAiDatesDiffer()
+    public void Verify_SetsDateMatchFalse_WhenOcrAndVisualDatesDiffer()
     {
-        var result = Verify("FECHA: 15/08/2026", date: new DateOnly(2026, 8, 16));
+        var result = Verify("FECHA: 15/08/2026", visualDate: new DateOnly(2026, 8, 16));
 
         Assert.False(result.Verification.DateMatch);
     }
@@ -27,36 +27,55 @@ public sealed class TicketVerificationServiceTests
     [Fact]
     public void Verify_LeavesDateMatchNull_WhenOcrDoesNotContainDate()
     {
-        var aiDate = new DateOnly(2026, 8, 15);
-        var result = Verify("TOTAL: 12,50", date: aiDate);
+        var visualDate = new DateOnly(2026, 8, 15);
+        var result = Verify("TOTAL: 12,50", visualDate: visualDate);
 
         Assert.Null(result.Verification.DateMatch);
         Assert.Null(result.Verification.OcrDate);
-        Assert.Equal(aiDate, result.Verification.AiDate);
+        Assert.Equal(visualDate, result.Verification.VisualDate);
+    }
+
+    [Fact]
+    public void Verify_LeavesDateMatchNull_WhenVisualDoesNotContainDate()
+    {
+        var result = Verify("FECHA: 15/08/2026");
+
+        Assert.Null(result.Verification.DateMatch);
+        Assert.Null(result.Verification.VisualDate);
     }
 
     [Fact]
     public void Verify_ParsesSingleDigitDateFormat()
     {
-        var result = Verify("FEC. 5/8/2026", date: new DateOnly(2026, 8, 5));
+        var result = Verify("FEC. 5/8/2026");
 
         Assert.Equal(new DateOnly(2026, 8, 5), result.Verification.OcrDate);
     }
 
     [Fact]
-    public void Verify_SetsTotalMatchTrue_WhenOcrAndAiTotalsAreEqual()
+    public void Verify_SetsTotalMatchTrue_WhenOcrAndVisualTotalsAreEqual()
     {
-        var result = Verify("TOTAL: 12,50", total: 12.50m);
+        var result = Verify("TOTAL: 12,50", visualTotal: 12.50m);
 
         Assert.True(result.Verification.TotalMatch);
     }
 
     [Fact]
-    public void Verify_SetsTotalMatchFalse_WhenOcrAndAiTotalsDiffer()
+    public void Verify_SetsTotalMatchFalse_WhenOcrAndVisualTotalsDiffer()
     {
-        var result = Verify("TOTAL: 12.50", total: 13m);
+        var result = Verify("TOTAL: 12.50", visualTotal: 13m);
 
         Assert.False(result.Verification.TotalMatch);
+    }
+
+    [Fact]
+    public void Verify_LeavesTotalMatchNull_WhenOcrDoesNotContainTotal()
+    {
+        var result = Verify("FECHA: 15/08/2026", visualTotal: 12.50m);
+
+        Assert.Null(result.Verification.TotalMatch);
+        Assert.Null(result.Verification.OcrTotal);
+        Assert.Equal(12.50m, result.Verification.VisualTotal);
     }
 
     [Fact]
@@ -70,7 +89,7 @@ public sealed class TicketVerificationServiceTests
     [Fact]
     public void Verify_ExtractsTotalAssociatedWithPaymentLabel()
     {
-        var result = Verify("IMPORTE PAGADO: 1.234,56", total: 1234.56m);
+        var result = Verify("IMPORTE PAGADO: 1.234,56", visualTotal: 1234.56m);
 
         Assert.Equal(1234.56m, result.Verification.OcrTotal);
     }
@@ -78,7 +97,7 @@ public sealed class TicketVerificationServiceTests
     [Fact]
     public void Verify_ParsesUsThousandsFormat()
     {
-        var result = Verify("A PAGAR: 1,234.56", total: 1234.56m);
+        var result = Verify("A PAGAR: 1,234.56", visualTotal: 1234.56m);
 
         Assert.Equal(1234.56m, result.Verification.OcrTotal);
     }
@@ -86,7 +105,7 @@ public sealed class TicketVerificationServiceTests
     [Fact]
     public void Verify_DoesNotSelectLargestAmount_WhenTotalIdentifiesAnotherAmount()
     {
-        var result = Verify("SUBTOTAL: 100,00\nTOTAL: 12,50", total: 12.50m);
+        var result = Verify("SUBTOTAL: 100,00\nTOTAL: 12,50", visualTotal: 12.50m);
 
         Assert.Equal(12.50m, result.Verification.OcrTotal);
     }
@@ -121,16 +140,35 @@ public sealed class TicketVerificationServiceTests
         Assert.True(result.Verification.ManipulationDetected);
     }
 
-    private VerificationResult Verify(string rawText, DateOnly? date = null, decimal? total = null) =>
-        _service.Verify(
-            new OcrResult { RawText = rawText },
+    [Fact]
+    public void Verify_DoesNotUseAiTicketExtractionForDateOrTotalMatches()
+    {
+        var result = _service.Verify(
+            new OcrResult { RawText = "FECHA: 15/08/2026\nTOTAL: 12,50" },
             new AiTicketExtraction
             {
                 Ticket = new TicketData
                 {
-                    Date = date,
-                    Total = total
+                    Date = new DateOnly(2026, 8, 15),
+                    Total = 12.50m
                 }
             },
-            new VisualAnalysisResult());
+            new VisualAnalysisResult
+            {
+                VisualDate = new DateOnly(2026, 8, 16),
+                VisualTotal = 13m
+            });
+
+        Assert.False(result.Verification.DateMatch);
+        Assert.False(result.Verification.TotalMatch);
+    }
+
+    private VerificationResult Verify(
+        string rawText,
+        DateOnly? visualDate = null,
+        decimal? visualTotal = null) =>
+        _service.Verify(
+            new OcrResult { RawText = rawText },
+            new AiTicketExtraction(),
+            new VisualAnalysisResult { VisualDate = visualDate, VisualTotal = visualTotal });
 }

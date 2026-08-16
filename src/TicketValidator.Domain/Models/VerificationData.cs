@@ -8,13 +8,13 @@ public sealed class VerificationData
 
     public DateOnly? OcrDate { get; init; }
 
-    public DateOnly? AiDate { get; init; }
+    public DateOnly? VisualDate { get; init; }
 
     public bool? TotalMatch { get; init; }
 
     public decimal? OcrTotal { get; init; }
 
-    public decimal? AiTotal { get; init; }
+    public decimal? VisualTotal { get; init; }
 
     public bool? ManipulationDetected { get; init; }
 }

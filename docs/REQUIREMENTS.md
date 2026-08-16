@@ -311,6 +311,8 @@ La IA se utilizará para:
 - Clasificar.
 - Comprender contexto.
 
+La IA de extracción basada en texto OCR estructura esa evidencia, pero no es una segunda fuente independiente para fecha ni total. La IA visual lee esos campos directamente desde la imagen y se contrasta con OCR.
+
 La IA no podrá sustituir automáticamente información ausente en OCR cuando dicha información sea necesaria para aprobar o rechazar un documento.
 
 ---
@@ -757,7 +759,7 @@ El sistema no deberá completar dígitos de una fecha que no puedan leerse con s
 
 ## RF-039 — Análisis visual
 
-El sistema deberá utilizar análisis visual para detectar indicios visibles de manipulación.
+El sistema deberá utilizar análisis visual para detectar indicios visibles de manipulación y realizar una lectura independiente de fecha y total directamente desde la imagen.
 
 ---
 
@@ -786,9 +788,9 @@ No se considerarán automáticamente manipulación:
 
 ---
 
-## RF-042 — Comparación OCR / IA
+## RF-042 — Comparación OCR / IA visual
 
-El sistema deberá comparar OCR e IA en los campos críticos.
+El sistema deberá comparar fecha y total de OCR con la lectura independiente de la IA visual.
 
 ---
 
@@ -1209,11 +1211,11 @@ ocrReadable
 
 dateMatch
 ocrDate
-aiDate
+visualDate
 
 totalMatch
 ocrTotal
-aiTotal
+visualTotal
 
 manipulationDetected
 ```
