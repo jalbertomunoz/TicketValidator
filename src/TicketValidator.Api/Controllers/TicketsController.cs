@@ -17,7 +17,9 @@ public sealed class TicketsController : ControllerBase
     private static readonly HashSet<string> SupportedContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "image/jpeg",
-        "image/png"
+        "image/png",
+        "image/jpg",
+        "application/octet-stream"
     };
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -64,19 +66,9 @@ public sealed class TicketsController : ControllerBase
             return BadRequest($"La imagen supera el límite de {_uploadOptions.MaxFileSizeBytes} bytes.");
         }
 
-        if (!SupportedContentTypes.Contains(file.ContentType))
-        {
-            return BadRequest("El archivo debe ser una imagen JPEG o PNG.");
-        }
-
         if (!SupportedExtensions.Contains(Path.GetExtension(file.FileName)))
         {
             return BadRequest("La extensión del archivo debe ser .jpg, .jpeg o .png.");
-        }
-
-        if (!HasExpectedContentTypeForExtension(file.FileName, file.ContentType))
-        {
-            return BadRequest("La extensión del archivo no corresponde con el tipo MIME indicado.");
         }
 
         byte[] image;
@@ -86,9 +78,14 @@ public sealed class TicketsController : ControllerBase
             image = stream.ToArray();
         }
 
-        if (!HasExpectedSignature(image, file.ContentType))
+        if (!HasExpectedSignature(image, Path.GetExtension(file.FileName)))
         {
             return BadRequest("El contenido del archivo no coincide con el formato indicado.");
+        }
+
+        if (!HasCompatibleContentType(file.ContentType, Path.GetExtension(file.FileName)))
+        {
+            return BadRequest("El archivo debe ser una imagen JPEG o PNG.");
         }
 
         var result = await _handler.HandleAsync(
@@ -98,16 +95,30 @@ public sealed class TicketsController : ControllerBase
         return Ok(MapResponse(result));
     }
 
-    private static bool HasExpectedSignature(byte[] image, string contentType) =>
-        contentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase)
+    private static bool HasExpectedSignature(byte[] image, string extension) =>
+        (extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+        || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase))
             ? image.AsSpan().StartsWith(JpegSignature)
-            : contentType.Equals("image/png", StringComparison.OrdinalIgnoreCase)
+            : extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
                 && image.AsSpan().StartsWith(PngSignature);
 
-    private static bool HasExpectedContentTypeForExtension(string fileName, string contentType) =>
-        Path.GetExtension(fileName).Equals(".png", StringComparison.OrdinalIgnoreCase)
+    private static bool HasCompatibleContentType(string contentType, string extension)
+    {
+        if (!SupportedContentTypes.Contains(contentType))
+        {
+            return false;
+        }
+
+        if (contentType.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
             ? contentType.Equals("image/png", StringComparison.OrdinalIgnoreCase)
-            : contentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase);
+            : contentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase)
+                || contentType.Equals("image/jpg", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static AnalyzeTicketResponse MapResponse(AnalyzeTicketResult result) => new()
     {

@@ -480,6 +480,9 @@ con `osd.traineddata` y `PageSegMode.OsdOnly`. Solo rota cuando la confianza
 técnica de OSD alcanza 15, valor recomendado por el wrapper como razonablemente
 confiable. Este valor no forma parte de la evidencia OCR ni de las reglas de
 negocio.
+Si OSD no dispone de evidencia suficiente para detectar la orientación, se
+conserva la imagen original y el OCR normal continúa. Los demás errores técnicos
+de Tesseract se propagan.
 
 No forma parte del MVP:
 

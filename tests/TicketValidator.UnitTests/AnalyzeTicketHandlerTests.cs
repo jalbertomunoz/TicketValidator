@@ -1,5 +1,6 @@
 using TicketValidator.Application.Abstractions;
 using TicketValidator.Application.DTOs;
+using TicketValidator.Application.Services;
 using TicketValidator.Application.UseCases.AnalyzeTicket;
 using TicketValidator.Domain.Enums;
 using TicketValidator.Domain.Models;
@@ -132,6 +133,45 @@ public sealed class AnalyzeTicketHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_ReturnsUnreadableAndSkipsAiServices_WhenOcrHasNoEvidenceAndVisualIsUnknown()
+    {
+        var fakes = new HandlerFakes { OcrResult = new OcrResult() };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult { VisualDocumentType = DocumentType.Unknown };
+
+        var result = await HandleWithRealVerificationAndRulesAsync(fakes);
+
+        Assert.Equal(AnalysisStatus.Unreadable, result.Decision.Status);
+        Assert.Equal(ReasonCode.ErrNoLegible, result.Decision.ReasonCode);
+        AssertNoOcrEvidenceServicesWereCalled(fakes);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ReturnsUnreadableAndSkipsAiServices_WhenOcrHasNoEvidenceAndVisualIsReceipt()
+    {
+        var fakes = new HandlerFakes { OcrResult = new OcrResult() };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult { VisualDocumentType = DocumentType.Receipt };
+
+        var result = await HandleWithRealVerificationAndRulesAsync(fakes);
+
+        Assert.Equal(AnalysisStatus.Unreadable, result.Decision.Status);
+        Assert.Equal(ReasonCode.ErrNoLegible, result.Decision.ReasonCode);
+        AssertNoOcrEvidenceServicesWereCalled(fakes);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ReturnsNoDocumentAndSkipsAiServices_WhenOcrHasNoEvidenceAndVisualIsNotDocument()
+    {
+        var fakes = new HandlerFakes { OcrResult = new OcrResult() };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult { VisualDocumentType = DocumentType.NotDocument };
+
+        var result = await HandleWithRealVerificationAndRulesAsync(fakes);
+
+        Assert.Equal(AnalysisStatus.Rejected, result.Decision.Status);
+        Assert.Equal(ReasonCode.ErrNoDocumento, result.Decision.ReasonCode);
+        AssertNoOcrEvidenceServicesWereCalled(fakes);
+    }
+
+    [Fact]
     public async Task HandleAsync_RethrowsAndAudits_WhenOcrFails()
     {
         var expectedException = new InvalidOperationException("OCR failed.");
@@ -245,6 +285,18 @@ public sealed class AnalyzeTicketHandlerTests
         await handlingTask;
     }
 
+    private static Task<AnalyzeTicketResult> HandleWithRealVerificationAndRulesAsync(HandlerFakes fakes) =>
+        fakes.CreateHandler(new TicketVerificationService(), new ExpenseRuleEngine())
+            .HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
+
+    private static void AssertNoOcrEvidenceServicesWereCalled(HandlerFakes fakes)
+    {
+        Assert.Equal(0, fakes.Extractor.CallCount);
+        Assert.Equal(0, fakes.ProductClassifier.CallCount);
+        Assert.Equal(0, fakes.ExpenseCoherenceAnalyzer.CallCount);
+        Assert.Equal(1, fakes.VisualAnalysis.CallCount);
+    }
+
     private sealed class HandlerFakes
     {
         public OrientationFake Orientation { get; } = new();
@@ -290,15 +342,17 @@ public sealed class AnalyzeTicketHandlerTests
             set => RuleEngine.Result = value;
         }
 
-        public AnalyzeTicketHandler CreateHandler() => new(
+        public AnalyzeTicketHandler CreateHandler(
+            ITicketVerificationService? ticketVerificationService = null,
+            IExpenseRuleEngine? expenseRuleEngine = null) => new(
             Orientation,
             Ocr,
             Extractor,
             ProductClassifier,
             ExpenseCoherenceAnalyzer,
             VisualAnalysis,
-            Verification,
-            RuleEngine,
+            ticketVerificationService ?? Verification,
+            expenseRuleEngine ?? RuleEngine,
             AuditLogger);
     }
 
@@ -317,7 +371,7 @@ public sealed class AnalyzeTicketHandlerTests
     {
         public int CallCount { get; private set; }
 
-        public OcrResult Result { get; set; } = new();
+        public OcrResult Result { get; set; } = new() { RawText = "OCR evidence" };
 
         public Func<byte[], CancellationToken, Task<OcrResult>>? Handler { get; set; }
 

@@ -3,6 +3,7 @@ using TicketValidator.Application.Abstractions;
 using TicketValidator.Infrastructure.OCR;
 using TesseractOCR;
 using TesseractOCR.Enums;
+using TesseractOCR.Exceptions;
 using TesseractOCR.Pix;
 
 namespace TicketValidator.Infrastructure.ImageProcessing;
@@ -44,16 +45,24 @@ public sealed class TesseractDocumentOrientationService : IDocumentOrientationSe
         using var pix = Image.LoadFromMemory(image);
         using var engine = new Engine(ResolveTessdataPath(), Language.Osd, EngineMode.Default);
         using var page = engine.Process(pix, PageSegMode.OsdOnly);
-        page.DetectOrientation(out var orientation, out var confidence);
+        try
+        {
+            page.DetectOrientation(out var orientation, out var confidence);
 
-        cancellationToken.ThrowIfCancellationRequested();
-        if (confidence < _minimumOrientationConfidence || orientation == 0)
+            cancellationToken.ThrowIfCancellationRequested();
+            if (confidence < _minimumOrientationConfidence || orientation == 0)
+            {
+                return Task.FromResult(image);
+            }
+
+            using var rotated = RotateToUpright(pix, orientation);
+            return Task.FromResult(Encode(rotated, GetImageFormat(image)));
+        }
+        catch (TesseractException exception) when (
+            exception.Message.Equals("Failed to detect image orientation", StringComparison.Ordinal))
         {
             return Task.FromResult(image);
         }
-
-        using var rotated = RotateToUpright(pix, orientation);
-        return Task.FromResult(Encode(rotated, GetImageFormat(image)));
     }
 
     private string ResolveTessdataPath()

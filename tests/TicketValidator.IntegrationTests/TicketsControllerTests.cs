@@ -56,12 +56,12 @@ public sealed class TicketsControllerTests
     }
 
     [Fact]
-    public async Task AnalyzeAsync_ReturnsBadRequest_WhenJpegSignatureDoesNotMatchContentType()
+    public async Task AnalyzeAsync_ReturnsBadRequest_WhenJpegExtensionHasPngSignature()
     {
         var result = await CreateController().AnalyzeAsync(
             new AnalyzeTicketRequest
             {
-                File = CreateFile([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], "image/jpeg"),
+                File = CreateFile([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], "image/jpeg", "ticket.jpg"),
                 ExpenseType = ExpenseType.Meals
             },
             CancellationToken.None);
@@ -104,18 +104,112 @@ public sealed class TicketsControllerTests
         Assert.Equal(expectedReasonCode, response.ReasonCode);
     }
 
+    [Theory]
+    [InlineData("ticket.jpg")]
+    [InlineData("ticket.jpeg")]
+    public async Task AnalyzeAsync_AcceptsJpegExtensionsWithMatchingSignature(string fileName)
+    {
+        var result = await CreateController().AnalyzeAsync(
+            new AnalyzeTicketRequest
+            {
+                File = CreateFile([0xFF, 0xD8, 0xFF], "image/jpeg", fileName),
+                ExpenseType = ExpenseType.Meals
+            },
+            CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Theory]
+    [InlineData("application/octet-stream")]
+    [InlineData("image/jpg")]
+    public async Task AnalyzeAsync_AcceptsJpegWithGenericOrLegacyContentType(string contentType)
+    {
+        var result = await CreateController().AnalyzeAsync(
+            new AnalyzeTicketRequest
+            {
+                File = CreateFile([0xFF, 0xD8, 0xFF], contentType, "ticket.jpg"),
+                ExpenseType = ExpenseType.Meals
+            },
+            CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
     [Fact]
     public async Task AnalyzeAsync_AcceptsPngWithMatchingSignature()
     {
         var result = await CreateController().AnalyzeAsync(
             new AnalyzeTicketRequest
             {
-                File = CreateFile([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], "image/png"),
+                File = CreateFile([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], "image/png", "ticket.png"),
                 ExpenseType = ExpenseType.Meals
             },
             CancellationToken.None);
 
         Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_AcceptsPngWithGenericContentType()
+    {
+        var result = await CreateController().AnalyzeAsync(
+            new AnalyzeTicketRequest
+            {
+                File = CreateFile(
+                    [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+                    "application/octet-stream",
+                    "ticket.png"),
+                ExpenseType = ExpenseType.Meals
+            },
+            CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_ReturnsBadRequest_WhenFileExtensionIsUnsupported()
+    {
+        var result = await CreateController().AnalyzeAsync(
+            new AnalyzeTicketRequest
+            {
+                File = CreateFile([0xFF, 0xD8, 0xFF], "image/jpeg", "ticket.gif"),
+                ExpenseType = ExpenseType.Meals
+            },
+            CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_ReturnsBadRequest_WhenPngExtensionHasJpegSignature()
+    {
+        var result = await CreateController().AnalyzeAsync(
+            new AnalyzeTicketRequest
+            {
+                File = CreateFile(
+                    [0xFF, 0xD8, 0xFF],
+                    "image/jpeg",
+                    "ticket.png"),
+                ExpenseType = ExpenseType.Meals
+            },
+            CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_ReturnsBadRequest_WhenSignatureIsUnknown()
+    {
+        var result = await CreateController().AnalyzeAsync(
+            new AnalyzeTicketRequest
+            {
+                File = CreateFile([0x00, 0x01, 0x02], "image/jpeg", "ticket.jpg"),
+                ExpenseType = ExpenseType.Meals
+            },
+            CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     private static TicketsController CreateController(AnalysisDecision? decision = null, long maxFileSizeBytes = UploadOptions.DefaultMaxFileSizeBytes) => new(
@@ -131,9 +225,9 @@ public sealed class TicketsControllerTests
             new AuditLoggerStub()),
         Options.Create(new UploadOptions { MaxFileSizeBytes = maxFileSizeBytes }));
 
-    private static IFormFile CreateFile(byte[] content, string contentType)
+    private static IFormFile CreateFile(byte[] content, string contentType, string fileName = "ticket.jpg")
     {
-        var file = new FormFile(new MemoryStream(content), 0, content.Length, "file", "ticket")
+        var file = new FormFile(new MemoryStream(content), 0, content.Length, "file", fileName)
         {
             Headers = new HeaderDictionary()
         };

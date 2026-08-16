@@ -55,24 +55,38 @@ public sealed class AnalyzeTicketHandler
         {
             var orientedImage = await _documentOrientationService.OrientAsync(command.Image, cancellationToken);
             var ocrResult = await _ocrService.ReadAsync(orientedImage, cancellationToken);
-
-            var extractionTask = _aiTicketExtractor.ExtractAsync(ocrResult.RawText, cancellationToken);
             var visualAnalysisTask = _visualAnalysisService.AnalyzeAsync(orientedImage, cancellationToken);
-            var classificationTask = ClassifyProductsAsync(extractionTask, cancellationToken);
-            await Task.WhenAll(classificationTask, visualAnalysisTask);
+            var ocrText = GetOcrEvidenceText(ocrResult);
 
-            var aiExtraction = await extractionTask;
-            var classifiedTicket = WithProducts(aiExtraction.Ticket, await classificationTask);
-            var classifiedExtraction = new AiTicketExtraction { Ticket = classifiedTicket };
+            TicketData classifiedTicket;
+            AiTicketExtraction classifiedExtraction;
+            ExpenseCoherenceResult coherence;
+            if (!string.IsNullOrWhiteSpace(ocrText))
+            {
+                var extractionTask = _aiTicketExtractor.ExtractAsync(ocrText, cancellationToken);
+                var classificationTask = ClassifyProductsAsync(extractionTask, cancellationToken);
+                await Task.WhenAll(classificationTask, visualAnalysisTask);
+
+                var aiExtraction = await extractionTask;
+                classifiedTicket = WithProducts(aiExtraction.Ticket, await classificationTask);
+                classifiedExtraction = new AiTicketExtraction { Ticket = classifiedTicket };
+                coherence = await _expenseCoherenceAnalyzer.AnalyzeAsync(
+                    classifiedTicket,
+                    command.ExpenseType,
+                    cancellationToken);
+            }
+            else
+            {
+                classifiedTicket = new TicketData();
+                classifiedExtraction = new AiTicketExtraction { Ticket = classifiedTicket };
+                coherence = new ExpenseCoherenceResult();
+            }
+
             var visualAnalysis = await visualAnalysisTask;
             var verificationResult = _ticketVerificationService.Verify(
                 ocrResult,
                 classifiedExtraction,
                 visualAnalysis);
-            var coherence = await _expenseCoherenceAnalyzer.AnalyzeAsync(
-                classifiedTicket,
-                command.ExpenseType,
-                cancellationToken);
             var decision = _expenseRuleEngine.Evaluate(
                 classifiedTicket,
                 verificationResult.Verification,
@@ -117,6 +131,13 @@ public sealed class AnalyzeTicketHandler
         var extraction = await extractionTask;
         return await _productClassifier.ClassifyAsync(extraction.Ticket.Products, cancellationToken);
     }
+
+    private static string GetOcrEvidenceText(OcrResult ocrResult) =>
+        !string.IsNullOrWhiteSpace(ocrResult.RawText)
+            ? ocrResult.RawText
+            : string.Join(' ', ocrResult.Words
+                .Select(word => word.Text)
+                .Where(text => !string.IsNullOrWhiteSpace(text)));
 
     private static TicketData WithProducts(TicketData ticket, IReadOnlyList<ProductData> products) => new()
     {

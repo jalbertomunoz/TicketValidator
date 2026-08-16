@@ -229,7 +229,10 @@ Obligatorio.
 Formatos admitidos:
 
 ```text
-Extensiones: .jpg y .jpeg con image/jpeg; .png con image/png
+Extensiones: .jpg, .jpeg, .png
+Firma binaria: fuente principal para comprobar que .jpg/.jpeg son JPEG y .png es PNG
+MIME habitual: image/jpeg, image/png
+MIME genérico admitido con extensión y firma coherentes: application/octet-stream, image/jpg
 ```
 
 El tamaño máximo de carga se configura mediante `Uploads:MaxFileSizeBytes` y su valor inicial es 10 MB.
@@ -456,7 +459,9 @@ El sistema deberá rechazar solicitudes:
 El sistema deberá intentar detectar la orientación gruesa 0/90/180/270 mediante
 Tesseract OSD antes de realizar OCR. Si OSD no alcanza confianza técnica
 suficiente (15 como criterio técnico inicial del wrapper), se conservará la
-imagen original. Este umbral no es confianza OCR de negocio.
+imagen original. Si OSD no puede detectar orientación por falta de evidencia,
+también se conservará la imagen original y continuará OCR normal. Este umbral
+no es confianza OCR de negocio.
 
 ---
 
