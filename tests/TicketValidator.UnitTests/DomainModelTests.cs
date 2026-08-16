@@ -54,12 +54,16 @@ public sealed class DomainModelTests
         };
         var ticket = new TicketData
         {
+            InvoiceNumber = "T-2026-001",
             Date = new DateOnly(2026, 8, 15),
+            Time = "14:30",
             Total = 18.50m,
             Products = products
         };
 
+        Assert.Equal("T-2026-001", ticket.InvoiceNumber);
         Assert.Equal(new DateOnly(2026, 8, 15), ticket.Date);
+        Assert.Equal("14:30", ticket.Time);
         Assert.Equal(18.50m, ticket.Total);
         Assert.Same(products, ticket.Products);
     }

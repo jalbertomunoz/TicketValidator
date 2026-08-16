@@ -14,7 +14,11 @@ public sealed class TicketData
 
     public string? TaxId { get; init; }
 
+    public string? InvoiceNumber { get; init; }
+
     public DateOnly? Date { get; init; }
+
+    public string? Time { get; init; }
 
     public decimal? Total { get; init; }
 

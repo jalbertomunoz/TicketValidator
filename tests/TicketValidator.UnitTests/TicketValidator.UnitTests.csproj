@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\TicketValidator.Domain\TicketValidator.Domain.csproj" />
     <ProjectReference Include="..\..\src\TicketValidator.Application\TicketValidator.Application.csproj" />
+    <ProjectReference Include="..\..\src\TicketValidator.Infrastructure\TicketValidator.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
