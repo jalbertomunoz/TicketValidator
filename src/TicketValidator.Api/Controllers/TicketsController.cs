@@ -29,10 +29,15 @@ public sealed class TicketsController : ControllerBase
         _uploadOptions = uploadOptions?.Value ?? throw new ArgumentNullException(nameof(uploadOptions));
     }
 
+    /// <summary>Analiza un ticket o factura de gasto mediante OCR, Inteligencia Artificial y reglas de negocio.</summary>
+    /// <response code="200">Análisis realizado correctamente, incluso para resultados funcionales de rechazo o revisión.</response>
+    /// <response code="400">Petición inválida, archivo ausente, formato no soportado, firma inválida o tamaño excedido.</response>
+    /// <response code="500">Error técnico no controlado.</response>
     [HttpPost("analyze")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(AnalyzeTicketResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<AnalyzeTicketResponse>> AnalyzeAsync(
         [FromForm] AnalyzeTicketRequest request,
         CancellationToken cancellationToken)

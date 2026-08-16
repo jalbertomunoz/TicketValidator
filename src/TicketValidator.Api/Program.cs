@@ -1,5 +1,8 @@
+using System.Reflection;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using TicketValidator.Api.Configuration;
+using TicketValidator.Api.OpenApi;
 using TicketValidator.Application.Abstractions;
 using TicketValidator.Application.Services;
 using TicketValidator.Application.UseCases.AnalyzeTicket;
@@ -8,9 +11,16 @@ using TicketValidator.Infrastructure.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.Configure<ApiBehaviorOptions>(options => options.SuppressModelStateInvalidFilter = true);
-builder.Services.AddOpenApi();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SchemaFilter<CamelCaseSchemaFilter>();
+    options.OperationFilter<MultipartFormSchemaOperationFilter>();
+    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFile));
+});
 builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection("OpenAI"));
 builder.Services.PostConfigure<OpenAiOptions>(options =>
 {
@@ -24,13 +34,12 @@ builder.Services.AddTransient<AnalyzeTicketHandler>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
-
 app.UseHttpsRedirection();
+app.UseSwagger();
+app.UseSwaggerUI();
+app.MapGet("/", () => Results.Redirect("/swagger"));
 app.MapControllers();
 
 app.Run();
+
+public partial class Program;

@@ -1214,6 +1214,8 @@ Los tickets reales utilizados durante la experimentación OCR permanecerán fuer
 # 25. Swagger
 
 Swagger UI será la interfaz técnica obligatoria del MVP.
+Se publica en `/swagger` tanto en desarrollo como en Render para facilitar la
+demostración académica de la API sin autenticación.
 
 Permitirá:
 
