@@ -713,7 +713,7 @@ Infrastructure/
     └── Prompts/
         ├── TicketExtractionPrompt.cs
         ├── ProductClassificationPrompt.cs
-        └── VisualManipulationPrompt.cs
+        └── VisualAnalysisPrompt.cs
 ```
 
 ---
@@ -758,9 +758,9 @@ La clasificación no puede modificar el texto original.
 
 ---
 
-## 9.3 VisualManipulationPrompt
+## 9.3 VisualAnalysisPrompt
 
-Responsable exclusivamente del análisis visual de indicios de manipulación.
+Responsable de la lectura visual independiente de fecha y total, y del análisis de indicios de manipulación.
 
 No debe decidir la aceptación del ticket.
 
@@ -791,7 +791,7 @@ TicketValidator.Infrastructure/
 │   └── Prompts/
 │       ├── TicketExtractionPrompt.cs
 │       ├── ProductClassificationPrompt.cs
-│       └── VisualManipulationPrompt.cs
+│       └── VisualAnalysisPrompt.cs
 │
 ├── ImageProcessing/
 │   └── DocumentOrientationService.cs
