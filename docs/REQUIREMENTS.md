@@ -503,13 +503,17 @@ No deberá inventar información ausente.
 
 ## RF-011 — Tipo de documento
 
-El sistema deberá intentar determinar:
+El análisis visual deberá determinar explícitamente:
 
 ```text
 TICKET
 FACTURA
 NO_DOCUMENTO
+UNKNOWN
 ```
+
+`NO_DOCUMENTO` requiere evidencia positiva de que la imagen no es un ticket ni factura. `UNKNOWN` representa evidencia insuficiente y no podrá convertirse automáticamente en `NO_DOCUMENTO`.
+Si la visión indica `NO_DOCUMENTO` pero el tipo estructurado desde OCR es ticket o factura, el resultado será revisión humana mediante `DocumentTypeMismatch`, no rechazo automático.
 
 ---
 
@@ -759,7 +763,7 @@ El sistema no deberá completar dígitos de una fecha que no puedan leerse con s
 
 ## RF-039 — Análisis visual
 
-El sistema deberá utilizar análisis visual para detectar indicios visibles de manipulación y realizar una lectura independiente de fecha y total directamente desde la imagen.
+El sistema deberá utilizar análisis visual para clasificar explícitamente ticket, factura, no documento o desconocido, detectar indicios visibles de manipulación y realizar una lectura independiente de fecha y total directamente desde la imagen.
 
 ---
 
@@ -1088,14 +1092,16 @@ La ausencia de indicios de manipulación no significa que el documento haya sido
 El motor de reglas utilizará inicialmente la siguiente prioridad:
 
 ```text
-1. ERR_NO_DOCUMENTO
+1. ERR_NO_DOCUMENTO, solo ante una clasificación visual explícita `NO_DOCUMENTO` sin evidencia OCR contradictoria de ticket o factura
 2. ERR_NO_LEGIBLE
 3. ERR_DOCUMENTO_MANIPULADO
 4. ERR_BEBIDA_ALCOHOLICA
 5. ERR_TIPO_GASTO_INCOHERENTE
 6. ERR_SIN_TOTAL
 7. ERR_SIN_FECHA
-8. OK
+8. DATE_MISMATCH
+9. TOTAL_MISMATCH
+10. OK
 ```
 
 ---

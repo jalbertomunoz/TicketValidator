@@ -1,8 +1,12 @@
+using TicketValidator.Domain.Enums;
+
 namespace TicketValidator.Domain.Models;
 
 public sealed class VerificationData
 {
     public bool OcrReadable { get; init; }
+
+    public DocumentType? VisualDocumentType { get; init; }
 
     public bool? DateMatch { get; init; }
 

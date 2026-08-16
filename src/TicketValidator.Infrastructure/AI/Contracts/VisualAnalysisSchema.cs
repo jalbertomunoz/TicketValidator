@@ -9,12 +9,13 @@ internal static class VisualAnalysisSchema
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "documentType": { "type": "string", "enum": ["TICKET", "FACTURA", "NO_DOCUMENTO", "UNKNOWN"] },
             "visualDate": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
             "visualTotal": { "type": ["number", "null"] },
             "manipulationDetected": { "type": ["boolean", "null"] },
             "details": { "type": ["string", "null"] }
           },
-          "required": ["visualDate", "visualTotal", "manipulationDetected", "details"]
+          "required": ["documentType", "visualDate", "visualTotal", "manipulationDetected", "details"]
         }
         """;
 }

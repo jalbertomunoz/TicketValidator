@@ -15,6 +15,22 @@ public sealed class ExpenseRuleEngine : IExpenseRuleEngine
         ArgumentNullException.ThrowIfNull(ticket);
         ArgumentNullException.ThrowIfNull(verification);
 
+        if (verification.VisualDocumentType == DocumentType.NotDocument)
+        {
+            if (ticket.DocumentType is DocumentType.Receipt or DocumentType.Invoice)
+            {
+                return CreateDecision(
+                    AnalysisStatus.ReviewRequired,
+                    ReasonCode.DocumentTypeMismatch,
+                    "La imagen no parece un ticket ni una factura, pero el OCR identifica un documento de gasto.");
+            }
+
+            return CreateDecision(
+                AnalysisStatus.Rejected,
+                ReasonCode.ErrNoDocumento,
+                "El documento proporcionado no es un ticket ni una factura.");
+        }
+
         if (!verification.OcrReadable)
         {
             return CreateDecision(

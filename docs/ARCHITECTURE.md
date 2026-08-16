@@ -286,6 +286,7 @@ Campos iniciales:
 
 ```text
 ocrReadable
+visualDocumentType
 
 dateMatch
 ocrDate
@@ -442,7 +443,7 @@ Sus fechas y totales estructurados no constituyen una segunda fuente independien
 
 Responsable del análisis visual limitado del MVP.
 
-Además de los indicios de manipulación, realiza una lectura independiente de fecha y total directamente desde la imagen para contrastarlos con OCR.
+Clasifica explícitamente la imagen como ticket, factura, no documento o desconocida. Además de los indicios de manipulación, realiza una lectura independiente de fecha y total directamente desde la imagen para contrastarlos con OCR. `Unknown` no equivale a `NotDocument`.
 
 Analizará posibles indicios de:
 
@@ -1059,17 +1060,20 @@ El motor de reglas debe ser determinista.
 Orden inicial de prioridad:
 
 ```text
-1. ERR_NO_DOCUMENTO
+1. ERR_NO_DOCUMENTO (solo ante `VisualDocumentType = NotDocument` y sin evidencia OCR contradictoria de ticket o factura)
 2. ERR_NO_LEGIBLE
 3. ERR_DOCUMENTO_MANIPULADO
 4. ERR_BEBIDA_ALCOHOLICA
 5. ERR_TIPO_GASTO_INCOHERENTE
 6. ERR_SIN_TOTAL
 7. ERR_SIN_FECHA
-8. OK
+8. DATE_MISMATCH
+9. TOTAL_MISMATCH
+10. OK
 ```
 
 `REVIEW_REQUIRED` se utilizará para discrepancias donde no exista una causa de rechazo de prioridad superior.
+Una contradicción entre `VisualDocumentType = NotDocument` y `TicketData.DocumentType = Receipt` o `Invoice` produce `DocumentTypeMismatch` y revisión humana.
 
 ---
 

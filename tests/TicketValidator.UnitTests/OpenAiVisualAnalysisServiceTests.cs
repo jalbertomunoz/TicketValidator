@@ -1,5 +1,6 @@
 using TicketValidator.Infrastructure.AI;
 using TicketValidator.Infrastructure.AI.Contracts;
+using TicketValidator.Domain.Enums;
 
 namespace TicketValidator.UnitTests;
 
@@ -28,6 +29,7 @@ public sealed class OpenAiVisualAnalysisServiceTests
     {
         var result = VisualAnalysisMapper.Map(new VisualAnalysisResponse
         {
+            DocumentType = "TICKET",
             VisualDate = "2026-08-16",
             VisualTotal = 12.50m,
             ManipulationDetected = false,
@@ -40,11 +42,28 @@ public sealed class OpenAiVisualAnalysisServiceTests
         Assert.Null(result.Details);
     }
 
+    [Theory]
+    [InlineData("TICKET", DocumentType.Receipt)]
+    [InlineData("FACTURA", DocumentType.Invoice)]
+    [InlineData("NO_DOCUMENTO", DocumentType.NotDocument)]
+    [InlineData("UNKNOWN", DocumentType.Unknown)]
+    public void Map_MapsVisualDocumentType(string documentType, DocumentType expectedDocumentType)
+    {
+        var result = VisualAnalysisMapper.Map(new VisualAnalysisResponse
+        {
+            DocumentType = documentType,
+            ManipulationDetected = false
+        });
+
+        Assert.Equal(expectedDocumentType, result.VisualDocumentType);
+    }
+
     [Fact]
     public void Map_PreservesNullVisualDate()
     {
         var result = VisualAnalysisMapper.Map(new VisualAnalysisResponse
         {
+            DocumentType = "UNKNOWN",
             VisualDate = null,
             VisualTotal = 12.50m,
             ManipulationDetected = false
@@ -58,6 +77,7 @@ public sealed class OpenAiVisualAnalysisServiceTests
     {
         var result = VisualAnalysisMapper.Map(new VisualAnalysisResponse
         {
+            DocumentType = "UNKNOWN",
             VisualDate = "2026-08-16",
             VisualTotal = null,
             ManipulationDetected = false
@@ -71,6 +91,7 @@ public sealed class OpenAiVisualAnalysisServiceTests
     {
         var result = VisualAnalysisMapper.Map(new VisualAnalysisResponse
         {
+            DocumentType = "TICKET",
             ManipulationDetected = true,
             Details = "Se observa una sobrescritura en el importe total."
         });
@@ -84,6 +105,7 @@ public sealed class OpenAiVisualAnalysisServiceTests
     {
         var result = VisualAnalysisMapper.Map(new VisualAnalysisResponse
         {
+            DocumentType = "TICKET",
             ManipulationDetected = false,
             Details = "No se observan indicios."
         });

@@ -76,6 +76,7 @@ public sealed class DomainModelTests
         var verification = new VerificationData
         {
             OcrReadable = true,
+            VisualDocumentType = DocumentType.Receipt,
             DateMatch = false,
             OcrDate = ocrDate,
             VisualDate = visualDate,
@@ -86,6 +87,7 @@ public sealed class DomainModelTests
         };
 
         Assert.True(verification.OcrReadable);
+        Assert.Equal(DocumentType.Receipt, verification.VisualDocumentType);
         Assert.False(verification.DateMatch);
         Assert.Equal(ocrDate, verification.OcrDate);
         Assert.Equal(visualDate, verification.VisualDate);

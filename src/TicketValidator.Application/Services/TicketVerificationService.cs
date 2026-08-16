@@ -47,6 +47,7 @@ public sealed class TicketVerificationService : ITicketVerificationService
             {
                 OcrReadable = !string.IsNullOrWhiteSpace(ocrResult.RawText)
                     || ocrResult.Words.Any(word => !string.IsNullOrWhiteSpace(word.Text)),
+                VisualDocumentType = visualAnalysis.VisualDocumentType,
                 DateMatch = ocrDate is not null && visualDate is not null ? ocrDate == visualDate : null,
                 OcrDate = ocrDate,
                 VisualDate = visualDate,

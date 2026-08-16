@@ -4,5 +4,6 @@ public enum DocumentType
 {
     Unknown,
     Receipt,
-    Invoice
+    Invoice,
+    NotDocument
 }

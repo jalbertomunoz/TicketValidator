@@ -1,5 +1,6 @@
 using TicketValidator.Application.DTOs;
 using TicketValidator.Application.Services;
+using TicketValidator.Domain.Enums;
 using TicketValidator.Domain.Models;
 
 namespace TicketValidator.UnitTests;
@@ -141,6 +142,22 @@ public sealed class TicketVerificationServiceTests
     }
 
     [Fact]
+    public void Verify_PreservesNotDocumentVisualClassification()
+    {
+        var result = Verify("", visualDocumentType: DocumentType.NotDocument);
+
+        Assert.Equal(DocumentType.NotDocument, result.Verification.VisualDocumentType);
+    }
+
+    [Fact]
+    public void Verify_PreservesUnknownVisualClassification()
+    {
+        var result = Verify("", visualDocumentType: DocumentType.Unknown);
+
+        Assert.Equal(DocumentType.Unknown, result.Verification.VisualDocumentType);
+    }
+
+    [Fact]
     public void Verify_DoesNotUseAiTicketExtractionForDateOrTotalMatches()
     {
         var result = _service.Verify(
@@ -166,9 +183,15 @@ public sealed class TicketVerificationServiceTests
     private VerificationResult Verify(
         string rawText,
         DateOnly? visualDate = null,
-        decimal? visualTotal = null) =>
+        decimal? visualTotal = null,
+        DocumentType? visualDocumentType = null) =>
         _service.Verify(
             new OcrResult { RawText = rawText },
             new AiTicketExtraction(),
-            new VisualAnalysisResult { VisualDate = visualDate, VisualTotal = visualTotal });
+            new VisualAnalysisResult
+            {
+                VisualDate = visualDate,
+                VisualTotal = visualTotal,
+                VisualDocumentType = visualDocumentType
+            });
 }

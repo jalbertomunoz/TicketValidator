@@ -10,6 +10,7 @@ public enum ReasonCode
     ErrTipoGastoIncoherente,
     ErrSinTotal,
     ErrSinFecha,
+    DocumentTypeMismatch,
     DateMismatch,
     TotalMismatch,
     OcrLowConfidence

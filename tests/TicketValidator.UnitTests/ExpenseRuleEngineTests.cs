@@ -19,6 +19,81 @@ public sealed class ExpenseRuleEngineTests
     }
 
     [Fact]
+    public void Evaluate_RejectsWhenVisualAnalysisIdentifiesNotDocument()
+    {
+        var decision = Evaluate(
+            new TicketData { DocumentType = DocumentType.Unknown },
+            ValidVerification(visualDocumentType: DocumentType.NotDocument));
+
+        Assert.Equal(AnalysisStatus.Rejected, decision.Status);
+        Assert.Equal(ReasonCode.ErrNoDocumento, decision.ReasonCode);
+        Assert.Equal("El documento proporcionado no es un ticket ni una factura.", decision.Message);
+    }
+
+    [Fact]
+    public void Evaluate_PrioritizesNotDocumentOverUnreadable()
+    {
+        var decision = Evaluate(
+            new TicketData { DocumentType = DocumentType.Unknown },
+            ValidVerification(
+                ocrReadable: false,
+                visualDocumentType: DocumentType.NotDocument));
+
+        Assert.Equal(ReasonCode.ErrNoDocumento, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_PrioritizesNotDocumentOverManipulation()
+    {
+        var decision = Evaluate(
+            new TicketData { DocumentType = DocumentType.Unknown },
+            ValidVerification(
+                manipulationDetected: true,
+                visualDocumentType: DocumentType.NotDocument));
+
+        Assert.Equal(ReasonCode.ErrNoDocumento, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_LeavesUnknownVisualClassificationToTheRemainingRules()
+    {
+        var decision = Evaluate(
+            new TicketData { DocumentType = DocumentType.Unknown },
+            ValidVerification(
+                ocrReadable: false,
+                visualDocumentType: DocumentType.Unknown));
+
+        Assert.Equal(AnalysisStatus.Unreadable, decision.Status);
+        Assert.Equal(ReasonCode.ErrNoLegible, decision.ReasonCode);
+    }
+
+    [Theory]
+    [InlineData(DocumentType.Receipt)]
+    [InlineData(DocumentType.Invoice)]
+    public void Evaluate_RequiresReviewWhenVisualNotDocumentContradictsOcrDocumentType(DocumentType documentType)
+    {
+        var decision = Evaluate(
+            new TicketData { DocumentType = documentType },
+            ValidVerification(visualDocumentType: DocumentType.NotDocument));
+
+        Assert.Equal(AnalysisStatus.ReviewRequired, decision.Status);
+        Assert.Equal(ReasonCode.DocumentTypeMismatch, decision.ReasonCode);
+    }
+
+    [Theory]
+    [InlineData(DocumentType.Receipt)]
+    [InlineData(DocumentType.Invoice)]
+    public void Evaluate_DoesNotRejectRecognizedDocumentTypesAsNotDocument(DocumentType visualDocumentType)
+    {
+        var decision = Evaluate(
+            new TicketData { DocumentType = visualDocumentType },
+            ValidVerification(visualDocumentType: visualDocumentType));
+
+        Assert.Equal(AnalysisStatus.Approved, decision.Status);
+        Assert.Equal(ReasonCode.Ok, decision.ReasonCode);
+    }
+
+    [Fact]
     public void Evaluate_RejectsWhenManipulationIsDetected()
     {
         var decision = Evaluate(verification: ValidVerification(manipulationDetected: true));
@@ -140,9 +215,11 @@ public sealed class ExpenseRuleEngineTests
         bool? totalMatch = true,
         bool? manipulationDetected = false,
         decimal? ocrTotal = 12.50m,
-        bool includeOcrDate = true) => new()
+        bool includeOcrDate = true,
+        DocumentType? visualDocumentType = null) => new()
     {
         OcrReadable = ocrReadable,
+        VisualDocumentType = visualDocumentType,
         DateMatch = dateMatch,
         OcrDate = includeOcrDate ? new DateOnly(2026, 8, 15) : null,
         VisualDate = new DateOnly(2026, 8, 15),
