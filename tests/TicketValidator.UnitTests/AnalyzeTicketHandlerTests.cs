@@ -23,7 +23,7 @@ public sealed class AnalyzeTicketHandlerTests
     public async Task HandleAsync_CoordinatesServicesAndReturnsExpectedResult()
     {
         var expectedTicket = new TicketData { EstablishmentName = "Restaurant" };
-        var expectedVerification = new VerificationData { IsDateVerified = true };
+        var expectedVerification = new VerificationData { DateMatch = true };
         var expectedDecision = new AnalysisDecision
         {
             Status = AnalysisStatus.Approved,

@@ -2,13 +2,19 @@ namespace TicketValidator.Domain.Models;
 
 public sealed class VerificationData
 {
-    public decimal? OcrConfidence { get; init; }
+    public bool OcrReadable { get; init; }
 
-    public bool? IsDateVerified { get; init; }
+    public bool? DateMatch { get; init; }
 
-    public bool? IsTotalVerified { get; init; }
+    public DateOnly? OcrDate { get; init; }
 
-    public bool? IsDocumentTypeVerified { get; init; }
+    public DateOnly? AiDate { get; init; }
 
-    public bool? HasManipulationIndicators { get; init; }
+    public bool? TotalMatch { get; init; }
+
+    public decimal? OcrTotal { get; init; }
+
+    public decimal? AiTotal { get; init; }
+
+    public bool? ManipulationDetected { get; init; }
 }
