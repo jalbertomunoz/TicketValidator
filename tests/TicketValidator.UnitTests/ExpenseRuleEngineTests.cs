@@ -1,3 +1,4 @@
+using TicketValidator.Application.DTOs;
 using TicketValidator.Application.Services;
 using TicketValidator.Domain.Enums;
 using TicketValidator.Domain.Models;
@@ -124,6 +125,20 @@ public sealed class ExpenseRuleEngineTests
     }
 
     [Fact]
+    public void Evaluate_RejectsWhenExpenseCoherenceIsFalse()
+    {
+        var decision = Evaluate(coherence: new ExpenseCoherenceResult
+        {
+            IsCoherent = false,
+            IncompatibleConcepts = ["DETERGENTE", "LEJIA"]
+        });
+
+        Assert.Equal(AnalysisStatus.Rejected, decision.Status);
+        Assert.Equal(ReasonCode.ErrTipoGastoIncoherente, decision.ReasonCode);
+        Assert.Contains("DETERGENTE", decision.Message);
+    }
+
+    [Fact]
     public void Evaluate_RequiresReviewForDateMismatch()
     {
         var decision = Evaluate(verification: ValidVerification(dateMatch: false));
@@ -198,8 +213,15 @@ public sealed class ExpenseRuleEngineTests
         Assert.Null(decision.Message);
     }
 
-    private AnalysisDecision Evaluate(TicketData? ticket = null, VerificationData? verification = null) =>
-        _engine.Evaluate(ticket ?? ValidTicket(), verification ?? ValidVerification(), ExpenseType.Meals);
+    private AnalysisDecision Evaluate(
+        TicketData? ticket = null,
+        VerificationData? verification = null,
+        ExpenseCoherenceResult? coherence = null) =>
+        _engine.Evaluate(
+            ticket ?? ValidTicket(),
+            verification ?? ValidVerification(),
+            ExpenseType.Meals,
+            coherence ?? new ExpenseCoherenceResult { IsCoherent = true });
 
     private static TicketData ValidTicket(params ProductData[] products) => new()
     {

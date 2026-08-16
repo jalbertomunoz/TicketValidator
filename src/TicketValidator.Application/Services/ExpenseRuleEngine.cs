@@ -1,3 +1,4 @@
+using TicketValidator.Application.DTOs;
 using TicketValidator.Application.Abstractions;
 using TicketValidator.Domain.Enums;
 using TicketValidator.Domain.Models;
@@ -10,10 +11,12 @@ public sealed class ExpenseRuleEngine : IExpenseRuleEngine
     public AnalysisDecision Evaluate(
         TicketData ticket,
         VerificationData verification,
-        ExpenseType expenseType)
+        ExpenseType expenseType,
+        ExpenseCoherenceResult coherence)
     {
         ArgumentNullException.ThrowIfNull(ticket);
         ArgumentNullException.ThrowIfNull(verification);
+        ArgumentNullException.ThrowIfNull(coherence);
 
         if (verification.VisualDocumentType == DocumentType.NotDocument)
         {
@@ -55,6 +58,17 @@ public sealed class ExpenseRuleEngine : IExpenseRuleEngine
                 AnalysisStatus.Rejected,
                 ReasonCode.ErrBebidaAlcoholica,
                 $"Se ha encontrado el concepto {alcoholProduct.OcrText}.");
+        }
+
+        if (coherence.IsCoherent is false)
+        {
+            var message = coherence.IncompatibleConcepts.Count == 0
+                ? "La mayoría de la compra es claramente incoherente con el tipo de gasto."
+                : $"La mayoría de la compra es claramente incoherente con el tipo de gasto: {string.Join(", ", coherence.IncompatibleConcepts)}.";
+            return CreateDecision(
+                AnalysisStatus.Rejected,
+                ReasonCode.ErrTipoGastoIncoherente,
+                message);
         }
 
         if (verification.OcrTotal is null)

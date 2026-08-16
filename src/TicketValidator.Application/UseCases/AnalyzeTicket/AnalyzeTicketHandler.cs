@@ -11,6 +11,7 @@ public sealed class AnalyzeTicketHandler
     private readonly IOcrService _ocrService;
     private readonly IAiTicketExtractor _aiTicketExtractor;
     private readonly IProductClassifier _productClassifier;
+    private readonly IExpenseCoherenceAnalyzer _expenseCoherenceAnalyzer;
     private readonly IVisualAnalysisService _visualAnalysisService;
     private readonly ITicketVerificationService _ticketVerificationService;
     private readonly IExpenseRuleEngine _expenseRuleEngine;
@@ -21,6 +22,7 @@ public sealed class AnalyzeTicketHandler
         IOcrService ocrService,
         IAiTicketExtractor aiTicketExtractor,
         IProductClassifier productClassifier,
+        IExpenseCoherenceAnalyzer expenseCoherenceAnalyzer,
         IVisualAnalysisService visualAnalysisService,
         ITicketVerificationService ticketVerificationService,
         IExpenseRuleEngine expenseRuleEngine,
@@ -30,6 +32,7 @@ public sealed class AnalyzeTicketHandler
         _ocrService = ocrService;
         _aiTicketExtractor = aiTicketExtractor;
         _productClassifier = productClassifier;
+        _expenseCoherenceAnalyzer = expenseCoherenceAnalyzer;
         _visualAnalysisService = visualAnalysisService;
         _ticketVerificationService = ticketVerificationService;
         _expenseRuleEngine = expenseRuleEngine;
@@ -66,10 +69,15 @@ public sealed class AnalyzeTicketHandler
                 ocrResult,
                 classifiedExtraction,
                 visualAnalysis);
+            var coherence = await _expenseCoherenceAnalyzer.AnalyzeAsync(
+                classifiedTicket,
+                command.ExpenseType,
+                cancellationToken);
             var decision = _expenseRuleEngine.Evaluate(
                 classifiedTicket,
                 verificationResult.Verification,
-                command.ExpenseType);
+                command.ExpenseType,
+                coherence);
 
             stopwatch.Stop();
             await _auditLogger.LogAsync(

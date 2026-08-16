@@ -4,7 +4,15 @@ public enum ExpenseType
 {
     Unknown,
     Meals,
+    Diet,
+    Breakfast,
+    Lunch,
+    Dinner,
+    Fuel,
     Accommodation,
-    Transport,
+    Taxi,
+    Parking,
+    Material,
+    Highway,
     Other
 }

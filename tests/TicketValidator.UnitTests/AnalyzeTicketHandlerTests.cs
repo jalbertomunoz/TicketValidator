@@ -44,6 +44,7 @@ public sealed class AnalyzeTicketHandlerTests
         Assert.Equal(1, fakes.Ocr.CallCount);
         Assert.Equal(1, fakes.Extractor.CallCount);
         Assert.Equal(1, fakes.ProductClassifier.CallCount);
+        Assert.Equal(1, fakes.ExpenseCoherenceAnalyzer.CallCount);
         Assert.Equal(1, fakes.VisualAnalysis.CallCount);
         Assert.Equal(1, fakes.Verification.CallCount);
         Assert.Equal(1, fakes.RuleEngine.CallCount);
@@ -194,6 +195,21 @@ public sealed class AnalyzeTicketHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_RethrowsAndAudits_WhenExpenseCoherenceAnalysisFails()
+    {
+        var expectedException = new InvalidOperationException("Expense coherence analysis failed.");
+        var fakes = new HandlerFakes();
+        fakes.ExpenseCoherenceAnalyzer.Handler = (_, _, _) => Task.FromException<ExpenseCoherenceResult>(expectedException);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals)));
+
+        Assert.Same(expectedException, exception);
+        Assert.Single(fakes.AuditLogger.Entries);
+        Assert.Same(expectedException, fakes.AuditLogger.Entries[0].Error);
+    }
+
+    [Fact]
     public async Task HandleAsync_StartsProductClassificationWhileVisualAnalysisIsPending()
     {
         var extractionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -239,6 +255,8 @@ public sealed class AnalyzeTicketHandlerTests
 
         public ProductClassifierFake ProductClassifier { get; } = new();
 
+        public ExpenseCoherenceAnalyzerFake ExpenseCoherenceAnalyzer { get; } = new();
+
         public VisualAnalysisFake VisualAnalysis { get; } = new();
 
         public VerificationFake Verification { get; } = new();
@@ -277,6 +295,7 @@ public sealed class AnalyzeTicketHandlerTests
             Ocr,
             Extractor,
             ProductClassifier,
+            ExpenseCoherenceAnalyzer,
             VisualAnalysis,
             Verification,
             RuleEngine,
@@ -375,6 +394,24 @@ public sealed class AnalyzeTicketHandlerTests
         }
     }
 
+    private sealed class ExpenseCoherenceAnalyzerFake : IExpenseCoherenceAnalyzer
+    {
+        public int CallCount { get; private set; }
+
+        public ExpenseCoherenceResult Result { get; set; } = new();
+
+        public Func<TicketData, ExpenseType, CancellationToken, Task<ExpenseCoherenceResult>>? Handler { get; set; }
+
+        public Task<ExpenseCoherenceResult> AnalyzeAsync(
+            TicketData ticket,
+            ExpenseType expenseType,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return Handler?.Invoke(ticket, expenseType, cancellationToken) ?? Task.FromResult(Result);
+        }
+    }
+
     private sealed class RuleEngineFake : IExpenseRuleEngine
     {
         public int CallCount { get; private set; }
@@ -386,7 +423,8 @@ public sealed class AnalyzeTicketHandlerTests
         public AnalysisDecision Evaluate(
             TicketData ticket,
             VerificationData verification,
-            ExpenseType expenseType)
+            ExpenseType expenseType,
+            ExpenseCoherenceResult coherence)
         {
             CallCount++;
             ReceivedTicket = ticket;

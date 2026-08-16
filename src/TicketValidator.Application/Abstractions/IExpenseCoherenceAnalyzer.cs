@@ -1,15 +1,13 @@
 using TicketValidator.Application.DTOs;
 using TicketValidator.Domain.Enums;
 using TicketValidator.Domain.Models;
-using TicketValidator.Domain.Results;
 
 namespace TicketValidator.Application.Abstractions;
 
-public interface IExpenseRuleEngine
+public interface IExpenseCoherenceAnalyzer
 {
-    AnalysisDecision Evaluate(
+    Task<ExpenseCoherenceResult> AnalyzeAsync(
         TicketData ticket,
-        VerificationData verification,
         ExpenseType expenseType,
-        ExpenseCoherenceResult coherence);
+        CancellationToken cancellationToken = default);
 }

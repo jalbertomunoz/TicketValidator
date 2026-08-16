@@ -32,6 +32,7 @@ public static class InfrastructureServiceCollectionExtensions
         });
         services.AddTransient<IAiTicketExtractor, OpenAiTicketExtractor>();
         services.AddTransient<IProductClassifier, OpenAiProductClassifier>();
+        services.AddTransient<IExpenseCoherenceAnalyzer, OpenAiExpenseCoherenceAnalyzer>();
         services.AddTransient<IVisualAnalysisService, OpenAiVisualAnalysisService>();
 
         return services;
