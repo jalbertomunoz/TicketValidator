@@ -53,3 +53,20 @@ tampoco consumen la API de OpenAI ni requieren `OPENAI_API_KEY`; las pruebas
 del pipeline y de la API sustituyen las dependencias externas por fakes
 controlados. Las pruebas reales contra OpenAI se ejecutan manualmente y quedan
 fuera de la suite normal.
+
+## Docker
+
+Build:
+
+```powershell
+docker build -t ticketvalidator .
+```
+
+Run:
+
+```powershell
+docker run --rm -p 8080:8080 -e OpenAI__ApiKey="<TU_API_KEY>" ticketvalidator
+```
+
+Swagger está disponible en `http://localhost:8080/swagger`. Para conservar los
+logs opcionalmente, añadir `-v ticketvalidator-logs:/app/logs` al comando.

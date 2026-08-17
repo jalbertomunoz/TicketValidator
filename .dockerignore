@@ -1,0 +1,16 @@
+.git
+.github
+.vs
+.idea
+**/bin
+**/obj
+logs
+.env
+.env.*
+secrets.json
+*.user
+*.rsuser
+*.suo
+samples
+tickets
+tickets-locales
