@@ -102,6 +102,7 @@ public sealed class TicketsControllerTests
         var response = Assert.IsType<AnalyzeTicketResponse>(okResult.Value);
         Assert.Equal(expectedStatus, response.Status);
         Assert.Equal(expectedReasonCode, response.ReasonCode);
+        Assert.Equal("evidence", response.Verification.OcrRawText);
     }
 
     [Theory]

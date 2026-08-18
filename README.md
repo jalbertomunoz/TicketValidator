@@ -77,5 +77,9 @@ La interfaz web incluida en `wwwroot` es una herramienta auxiliar para pruebas
 manuales y demostración. No forma parte del núcleo funcional de TicketValidator
 ni contiene lógica de negocio.
 
+Como ayuda de diagnóstico, la respuesta de análisis expone `ocrRawText` dentro
+de `verification` y la demo permite visualizarlo. Este dato no interviene en
+las reglas, no se persiste y no se registra en logs.
+
 - Web demo: `http://localhost:<puerto>/`
 - Swagger: `http://localhost:<puerto>/swagger`

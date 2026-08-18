@@ -127,7 +127,7 @@ public sealed class TicketsController : ControllerBase
         ReasonCode = MapReasonCode(result.Decision.ReasonCode),
         Message = result.Decision.Message,
         Ticket = MapTicket(result.Ticket),
-        Verification = MapVerification(result.Verification)
+        Verification = MapVerification(result.Verification, result.OcrRawText)
     };
 
     private static TicketResponse MapTicket(TicketData ticket) => new()
@@ -163,9 +163,10 @@ public sealed class TicketsController : ControllerBase
         }).ToArray()
     };
 
-    private static VerificationResponse MapVerification(VerificationData verification) => new()
+    private static VerificationResponse MapVerification(VerificationData verification, string? ocrRawText) => new()
     {
         OcrReadable = verification.OcrReadable,
+        OcrRawText = ocrRawText,
         VisualDocumentType = MapDocumentType(verification.VisualDocumentType),
         DateMatch = verification.DateMatch,
         OcrDate = verification.OcrDate,

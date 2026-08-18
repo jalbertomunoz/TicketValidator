@@ -53,6 +53,7 @@ public sealed class AnalyzeTicketHandlerTests
         Assert.Null(fakes.AuditLogger.Entries[0].Error);
         Assert.NotSame(expectedTicket, result.Ticket);
         Assert.Equal("Restaurant", result.Ticket.EstablishmentName);
+        Assert.Equal("OCR evidence", result.OcrRawText);
         Assert.Same(expectedVerification, result.Verification);
         Assert.Same(expectedDecision, result.Decision);
     }
@@ -142,6 +143,7 @@ public sealed class AnalyzeTicketHandlerTests
 
         Assert.Equal(AnalysisStatus.Unreadable, result.Decision.Status);
         Assert.Equal(ReasonCode.ErrNoLegible, result.Decision.ReasonCode);
+        Assert.Equal(string.Empty, result.OcrRawText);
         AssertNoOcrEvidenceServicesWereCalled(fakes);
     }
 

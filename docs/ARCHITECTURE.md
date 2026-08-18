@@ -895,6 +895,9 @@ No debe contener reglas de negocio.
 La API puede servir una interfaz estática auxiliar desde `wwwroot` para pruebas
 manuales y demostración. Esta interfaz solo consume el endpoint REST existente;
 no forma parte del núcleo funcional ni contiene lógica de negocio.
+Como ayuda diagnóstica temporal, la respuesta HTTP puede incluir el texto OCR
+original en `verification.ocrRawText`; no se utiliza para reglas, persistencia
+ni auditoría.
 
 ---
 

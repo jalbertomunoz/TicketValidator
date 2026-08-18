@@ -77,6 +77,8 @@ public sealed class VerificationResponse
 {
     public bool OcrReadable { get; init; }
 
+    public string? OcrRawText { get; init; }
+
     public string? VisualDocumentType { get; init; }
 
     public bool? DateMatch { get; init; }

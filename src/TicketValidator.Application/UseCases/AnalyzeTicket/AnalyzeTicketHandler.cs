@@ -105,6 +105,7 @@ public sealed class AnalyzeTicketHandler
             return new AnalyzeTicketResult
             {
                 AnalysisId = analysisId,
+                OcrRawText = ocrResult.RawText,
                 Ticket = classifiedTicket,
                 Verification = verificationResult.Verification,
                 Decision = decision

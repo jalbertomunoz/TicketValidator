@@ -7,6 +7,8 @@ public sealed class AnalyzeTicketResult
 {
     public Guid AnalysisId { get; init; }
 
+    public string? OcrRawText { get; init; }
+
     public TicketData Ticket { get; init; } = new();
 
     public VerificationData Verification { get; init; } = new();

@@ -13,6 +13,7 @@ const resultMessage = document.querySelector('#result-message');
 const ticketDetails = document.querySelector('#ticket-details');
 const addressDetails = document.querySelector('#address-details');
 const verificationDetails = document.querySelector('#verification-details');
+const ocrRawText = document.querySelector('#ocr-raw-text');
 const productsBody = document.querySelector('#products-body');
 const vatSection = document.querySelector('#vat-section');
 const vatBody = document.querySelector('#vat-body');
@@ -162,6 +163,10 @@ function renderResult(result) {
     ['Visual total', result.verification?.visualTotal],
     ['Manipulation detected', booleanValue(result.verification?.manipulationDetected)]
   ]);
+  const rawText = result.verification?.ocrRawText;
+  ocrRawText.textContent = rawText === undefined || rawText === null || rawText === ''
+    ? 'No se ha obtenido texto OCR.'
+    : rawText;
 
   renderProducts(result.ticket?.products || []);
   renderVat(result.ticket?.vatDetails || []);
