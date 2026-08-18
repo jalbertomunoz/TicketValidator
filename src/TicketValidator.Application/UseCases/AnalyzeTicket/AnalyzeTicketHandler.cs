@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using TicketValidator.Application.Abstractions;
 using TicketValidator.Application.DTOs;
+using TicketValidator.Domain.Enums;
 using TicketValidator.Domain.Models;
 
 namespace TicketValidator.Application.UseCases.AnalyzeTicket;
@@ -160,7 +161,10 @@ public sealed class AnalyzeTicketHandler
         TicketData ticket,
         VisualAnalysisResult visualAnalysis) => new()
     {
-        DocumentType = ticket.DocumentType,
+        DocumentType = ticket.DocumentType is null or DocumentType.Unknown
+            && visualAnalysis.VisualDocumentType is DocumentType.Receipt or DocumentType.Invoice
+                ? visualAnalysis.VisualDocumentType
+                : ticket.DocumentType,
         EstablishmentName = ticket.EstablishmentName,
         EstablishmentType = ticket.EstablishmentType,
         Address = ticket.Address,

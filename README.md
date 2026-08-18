@@ -62,11 +62,13 @@ conserva como evidencia textual independiente para contrastar esos campos, y la
 IA sobre OCR mantiene la extracción estructurada auxiliar. El código toma siempre
 la decisión final.
 
-Si la lectura visual existe y OCR no obtiene el campo, el valor visual se usa sin
-marcarlo como corroborado. Si ambos valores difieren, el resultado es revisión.
-Si solo existe OCR para un campo crítico, se solicita revisión conservadora.
-`ocrReadable` indica únicamente que existe texto OCR; una lectura visual
-suficiente evita que un OCR vacío implique automáticamente `UNREADABLE`.
+Con OCR parcial, la ausencia de fecha o total OCR no impide usar y aprobar los
+campos visuales. Con OCR nulo, una lectura visual suficiente conserva esos
+valores pero devuelve `REVIEW_REQUIRED / OCR_LOW_CONFIDENCE`, ya que no hay
+contraste independiente. Sin OCR ni evidencia visual suficiente se devuelve
+`UNREADABLE / ERR_NO_LEGIBLE`. Si ambos valores difieren, el resultado es
+revisión; si solo existe OCR para un campo crítico, también se solicita revisión
+conservadora.
 
 ## Docker
 

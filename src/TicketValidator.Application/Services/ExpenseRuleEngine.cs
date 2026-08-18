@@ -112,6 +112,14 @@ public sealed class ExpenseRuleEngine : IExpenseRuleEngine
                 "Al menos un campo crítico solo dispone de evidencia OCR y requiere revisión visual.");
         }
 
+        if (!verification.OcrReadable)
+        {
+            return CreateDecision(
+                AnalysisStatus.ReviewRequired,
+                ReasonCode.OcrLowConfidence,
+                "La lectura visual no ha podido contrastarse porque OCR no ha obtenido evidencia textual.");
+        }
+
         return CreateDecision(AnalysisStatus.Approved, ReasonCode.Ok, null);
     }
 

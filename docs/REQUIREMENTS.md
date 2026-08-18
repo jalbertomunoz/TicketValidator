@@ -322,7 +322,10 @@ Visual + OCR coinciden
 → dato corroborado
 
 Visual existe + OCR no existe
-→ se utiliza el valor visual; Match = null
+→ con OCR parcial, se utiliza el valor visual; Match = null
+
+Visual existe + OCR nulo
+→ se conserva el valor visual; REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
 
 Visual y OCR difieren
 → REVIEW_REQUIRED y código de discrepancia
@@ -334,11 +337,12 @@ Ambas fuentes no obtienen el dato
 → ERR_SIN_FECHA o ERR_SIN_TOTAL
 ```
 
-`OcrReadable` solo indica que existe evidencia textual OCR. No representa la
-legibilidad general del documento: si OCR está vacío pero la visión clasifica un
-ticket o factura y obtiene fecha o total, no se devuelve automáticamente
-`UNREADABLE`. Si tampoco existe evidencia visual suficiente, se devuelve
-`UNREADABLE / ERR_NO_LEGIBLE`.
+`OcrReadable` solo indica que existe evidencia textual OCR. Se distingue OCR
+parcial, cuando existe texto aunque falten fecha o total, de OCR nulo, sin texto
+ni palabras. OCR parcial no impide aprobar una lectura visual suficiente. OCR
+nulo con ticket/factura y evidencia visual suficiente conserva esos valores, pero
+devuelve `REVIEW_REQUIRED / OCR_LOW_CONFIDENCE`; sin evidencia visual suficiente
+devuelve `UNREADABLE / ERR_NO_LEGIBLE`.
 
 ---
 
@@ -393,7 +397,7 @@ DATE_MISMATCH
 
 ---
 
-## 12.3 IA visual obtiene el dato y OCR no
+## 12.3 IA visual obtiene el dato y OCR parcial no
 
 Ejemplo:
 
@@ -402,7 +406,7 @@ IA visual:
 14/08/2026
 
 OCR:
-sin fecha
+texto sin fecha
 ```
 
 El sistema utilizará:
@@ -415,7 +419,19 @@ como lectura principal sin marcarla como corroborada por OCR.
 
 ---
 
-## 12.4 Solo OCR obtiene el dato
+## 12.4 OCR nulo con lectura visual suficiente
+
+Si OCR no obtiene texto ni palabras, pero la IA visual identifica ticket o
+factura y lee fecha o total:
+
+```text
+→ conservar los valores visuales
+→ REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
+```
+
+---
+
+## 12.5 Solo OCR obtiene el dato
 
 Si OCR encuentra un dato crítico y la IA visual no:
 
@@ -1143,7 +1159,7 @@ El motor de reglas utilizará inicialmente la siguiente prioridad:
 7. TOTAL_MISMATCH
 8. ERR_SIN_TOTAL, solo sin total visual ni OCR
 9. ERR_SIN_FECHA, solo sin fecha visual ni OCR
-10. OCR_LOW_CONFIDENCE, solo cuando un campo crítico existe exclusivamente en OCR
+10. OCR_LOW_CONFIDENCE, con un campo crítico exclusivo de OCR u OCR nulo con evidencia visual suficiente
 11. OK
 ```
 

@@ -297,9 +297,16 @@ Los umbrales se determinarán posteriormente mediante experimentación con ticke
 
 La configuración de confianza deberá mantenerse fuera de las reglas de negocio.
 
-`OcrReadable` solo significa que existe evidencia textual OCR. No implica que el
-documento sea ilegible cuando OCR está vacío: una clasificación visual de ticket
-o factura con fecha o total visuales es evidencia suficiente para continuar.
+`OcrReadable` solo significa que existe evidencia textual OCR. Distinguir:
+
+```text
+OCR parcial: OcrReadable = true aunque falten fecha o total
+→ la lectura visual puede aprobarse si no hay otra regla
+
+OCR nulo: OcrReadable = false y no hay texto ni palabras
+→ con ticket/factura y evidencia visual suficiente, REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
+→ sin evidencia visual suficiente, UNREADABLE / ERR_NO_LEGIBLE
+```
 
 ---
 
@@ -348,7 +355,10 @@ Visual + OCR coinciden
 → dato corroborado
 
 Visual existe + OCR no existe
-→ usar valor visual; Match = null
+→ con OCR parcial, usar valor visual; Match = null
+
+Visual existe + OCR nulo
+→ conservar valor visual; REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
 
 Visual y OCR discrepan
 → REVIEW_REQUIRED y código de discrepancia
@@ -521,9 +531,9 @@ Si fuera necesario añadir alguno, actualizar también la documentación y los t
 ## 17. REVIEW_REQUIRED
 
 Usar `REVIEW_REQUIRED` cuando exista evidencia pero haya una discrepancia o una
-lectura crítica exclusiva de OCR que impida tomar una decisión fiable. En este
-último caso se usa el código existente `OCR_LOW_CONFIDENCE`; no representa un
-umbral numérico, sino que falta la lectura visual principal.
+lectura crítica exclusiva de OCR o una lectura visual sin evidencia OCR que
+impida tomar una decisión fiable. En ambos casos se usa el código existente
+`OCR_LOW_CONFIDENCE`; no representa un umbral numérico.
 
 Ejemplos:
 
@@ -556,7 +566,7 @@ La prioridad inicial de las reglas es:
 7. TOTAL_MISMATCH
 8. ERR_SIN_TOTAL, solo sin total visual ni OCR
 9. ERR_SIN_FECHA, solo sin fecha visual ni OCR
-10. OCR_LOW_CONFIDENCE, solo cuando un campo crítico existe exclusivamente en OCR
+10. OCR_LOW_CONFIDENCE, con un campo crítico exclusivo de OCR o OCR nulo con evidencia visual suficiente
 11. OK
 ```
 
@@ -739,8 +749,11 @@ fecha o total visual con OCR ausente
 ticket girado
 → intentar rotar antes del OCR
 
-OCR vacío con ticket visual y fecha o total visual
-→ no marcar automáticamente UNREADABLE
+OCR parcial sin fecha o total, con ticket visual y campos visuales
+→ puede aprobarse
+
+OCR vacío con ticket visual y fecha y total visuales
+→ REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
 ```
 
 ---

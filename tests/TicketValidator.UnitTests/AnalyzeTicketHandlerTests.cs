@@ -199,10 +199,34 @@ public sealed class AnalyzeTicketHandlerTests
         AssertNoOcrEvidenceServicesWereCalled(fakes);
     }
 
-    [Fact]
-    public async Task HandleAsync_DoesNotReturnUnreadable_WhenOcrIsEmptyAndVisualReadsCriticalFields()
+    [Theory]
+    [InlineData(DocumentType.Receipt)]
+    [InlineData(DocumentType.Invoice)]
+    public async Task HandleAsync_RequiresReviewAndUsesVisualDocumentType_WhenOcrIsEmptyAndVisualReadsCriticalFields(
+        DocumentType visualDocumentType)
     {
         var fakes = new HandlerFakes { OcrResult = new OcrResult() };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult
+        {
+            VisualDocumentType = visualDocumentType,
+            VisualDate = new DateOnly(2026, 2, 26),
+            VisualTotal = 6.50m
+        };
+
+        var result = await HandleWithRealVerificationAndRulesAsync(fakes);
+
+        Assert.Equal(AnalysisStatus.ReviewRequired, result.Decision.Status);
+        Assert.Equal(ReasonCode.OcrLowConfidence, result.Decision.ReasonCode);
+        Assert.Equal(visualDocumentType, result.Ticket.DocumentType);
+        Assert.Equal(new DateOnly(2026, 2, 26), result.Ticket.Date);
+        Assert.Equal(6.50m, result.Ticket.Total);
+        AssertNoOcrEvidenceServicesWereCalled(fakes);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ApprovesWhenOcrIsPartialAndVisualReadsCriticalFields()
+    {
+        var fakes = new HandlerFakes { OcrResult = new OcrResult { RawText = "Capri EFECTI" } };
         fakes.VisualAnalysis.Result = new VisualAnalysisResult
         {
             VisualDocumentType = DocumentType.Receipt,
@@ -214,9 +238,32 @@ public sealed class AnalyzeTicketHandlerTests
 
         Assert.Equal(AnalysisStatus.Approved, result.Decision.Status);
         Assert.Equal(ReasonCode.Ok, result.Decision.ReasonCode);
-        Assert.Equal(new DateOnly(2026, 2, 26), result.Ticket.Date);
-        Assert.Equal(6.50m, result.Ticket.Total);
-        AssertNoOcrEvidenceServicesWereCalled(fakes);
+        Assert.Null(result.Verification.OcrDate);
+        Assert.Null(result.Verification.OcrTotal);
+        Assert.Equal(DocumentType.Receipt, result.Ticket.DocumentType);
+        Assert.Equal(1, fakes.Extractor.CallCount);
+        Assert.Equal(1, fakes.ProductClassifier.CallCount);
+        Assert.Equal(1, fakes.ExpenseCoherenceAnalyzer.CallCount);
+    }
+
+    [Theory]
+    [InlineData(DocumentType.Receipt)]
+    [InlineData(DocumentType.Invoice)]
+    public async Task HandleAsync_CompletesUnknownDocumentTypeFromVisualAnalysis(DocumentType visualDocumentType)
+    {
+        var fakes = new HandlerFakes
+        {
+            AiExtraction = new AiTicketExtraction
+            {
+                Ticket = new TicketData { DocumentType = DocumentType.Unknown }
+            }
+        };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult { VisualDocumentType = visualDocumentType };
+
+        var result = await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
+
+        Assert.Equal(visualDocumentType, result.Ticket.DocumentType);
+        Assert.Equal(visualDocumentType, fakes.RuleEngine.ReceivedTicket!.DocumentType);
     }
 
     [Fact]

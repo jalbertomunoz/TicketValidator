@@ -247,6 +247,64 @@ public sealed class ExpenseRuleEngineTests
     }
 
     [Fact]
+    public void Evaluate_RequiresReviewWhenOcrIsEmptyButVisualEvidenceIsSufficient()
+    {
+        var decision = Evaluate(verification: ValidVerification(
+            ocrReadable: false,
+            dateMatch: null,
+            totalMatch: null,
+            ocrTotal: null,
+            includeOcrDate: false,
+            visualDocumentType: DocumentType.Receipt));
+
+        Assert.Equal(AnalysisStatus.ReviewRequired, decision.Status);
+        Assert.Equal(ReasonCode.OcrLowConfidence, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_ApprovesWhenOcrIsPartialAndVisualProvidesCriticalFields()
+    {
+        var decision = Evaluate(verification: ValidVerification(
+            dateMatch: null,
+            totalMatch: null,
+            ocrTotal: null,
+            includeOcrDate: false,
+            visualDocumentType: DocumentType.Receipt));
+
+        Assert.Equal(AnalysisStatus.Approved, decision.Status);
+        Assert.Equal(ReasonCode.Ok, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_PrioritizesManipulationOverOcrLowConfidence()
+    {
+        var decision = Evaluate(verification: ValidVerification(
+            ocrReadable: false,
+            manipulationDetected: true,
+            ocrTotal: null,
+            includeOcrDate: false,
+            visualDocumentType: DocumentType.Receipt));
+
+        Assert.Equal(AnalysisStatus.Rejected, decision.Status);
+        Assert.Equal(ReasonCode.ErrDocumentoManipulado, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_PrioritizesAlcoholOverOcrLowConfidence()
+    {
+        var decision = Evaluate(
+            ValidTicket(new ProductData { OcrText = "CERVEZA MAHOU", IsAlcohol = true }),
+            ValidVerification(
+                ocrReadable: false,
+                ocrTotal: null,
+                includeOcrDate: false,
+                visualDocumentType: DocumentType.Receipt));
+
+        Assert.Equal(AnalysisStatus.Rejected, decision.Status);
+        Assert.Equal(ReasonCode.ErrBebidaAlcoholica, decision.ReasonCode);
+    }
+
+    [Fact]
     public void Evaluate_ApprovesValidTicket()
     {
         var decision = Evaluate();
