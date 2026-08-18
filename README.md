@@ -80,10 +80,10 @@ antiguas por esta regla y ningún caso se rechaza automáticamente.
 ## Orientación OCR
 
 Tesseract OSD es el primer intento para corregir 0/90/180/270. Si el OCR inicial
-no tiene texto útil o reconoce menos de tres palabras, se prueban las cuatro
-rotaciones ortogonales y se conserva la de mejor evidencia OCR. Es un fallback
-solo para OCR pobre: no usa OpenCV ni aplica corrección fina de inclinación o
-perspectiva.
+no tiene texto útil, reconoce menos de tres palabras, no obtiene fecha o no
+obtiene total, se prueban las cuatro rotaciones ortogonales y se conserva la de
+mejor evidencia OCR. Es un fallback para OCR pobre o sin evidencia crítica: no
+usa OpenCV ni aplica corrección fina de inclinación o perspectiva.
 
 ## Docker
 

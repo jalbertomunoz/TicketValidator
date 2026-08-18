@@ -506,14 +506,14 @@ conserva la imagen original y el OCR normal continúa. Los demás errores técni
 de Tesseract se propagan.
 
 `FallbackOcrOrientationService` coordina OSD y OCR antes del caso de uso. Si el
-primer OCR no tiene texto útil o reconoce menos de tres palabras, reutiliza ese
-resultado como candidato 0° y evalúa además 90°, 180° y 270° en sentido horario
-respecto a la imagen producida por OSD. Selecciona la mayor evidencia mediante
-palabras, confianza media y bonificaciones por fecha y total detectables. En
-empates conserva el candidato inicial y, después, la menor rotación. La imagen y
-el `OcrResult` seleccionados se entregan juntos al handler, que envía esa misma
-imagen al análisis visual. Es un fallback de robustez y no se activa con OCR
-suficiente.
+primer OCR no tiene texto útil, reconoce menos de tres palabras, no obtiene fecha
+o no obtiene total, reutiliza ese resultado como candidato 0° y evalúa además
+90°, 180° y 270° en sentido horario respecto a la imagen producida por OSD.
+Selecciona la mayor evidencia mediante palabras, confianza media y bonificaciones
+por fecha y total detectables. En empates conserva el candidato inicial y,
+después, la menor rotación. La imagen y el `OcrResult` seleccionados se entregan
+juntos al handler, que envía esa misma imagen al análisis visual. Es un fallback
+de robustez y no se activa cuando OCR aporta texto, fecha y total suficientes.
 
 No forma parte del MVP:
 

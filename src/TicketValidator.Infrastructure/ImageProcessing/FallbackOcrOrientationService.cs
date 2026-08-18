@@ -81,7 +81,10 @@ public sealed class FallbackOcrOrientationService : IOcrOrientationService
     }
 
     private static bool IsInsufficient(OcrResult ocrResult, OcrEvidenceAnalysis evidence) =>
-        string.IsNullOrWhiteSpace(ocrResult.RawText) || evidence.WordCount < MinimumUsefulWordCount;
+        string.IsNullOrWhiteSpace(ocrResult.RawText)
+        || evidence.WordCount < MinimumUsefulWordCount
+        || evidence.Date is null
+        || evidence.Total is null;
 
     private static Candidate CreateCandidate(int rotation, byte[] image, OcrResult ocrResult, bool isInitial)
     {

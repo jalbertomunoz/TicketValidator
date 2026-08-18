@@ -21,6 +21,57 @@ public sealed class FallbackOcrOrientationServiceTests
         Assert.Empty(rotations);
     }
 
+    [Fact]
+    public async Task ReadBestAsync_UsesFallback_WhenInitialOcrHasManyWordsButNoDate()
+    {
+        var ocr = new OcrFake(image => image[0] == 180 ? UsefulOcr() : OcrWithTotalOnly(10));
+        var service = CreateService(ocr, []);
+
+        var result = await service.ReadBestAsync([0]);
+
+        Assert.Equal(180, result.SelectedRotation);
+        Assert.Equal(4, ocr.CallCount);
+    }
+
+    [Fact]
+    public async Task ReadBestAsync_UsesFallback_WhenInitialOcrHasManyWordsButNoTotal()
+    {
+        var ocr = new OcrFake(image => image[0] == 180 ? UsefulOcr() : OcrWithDateOnly(10));
+        var service = CreateService(ocr, []);
+
+        var result = await service.ReadBestAsync([0]);
+
+        Assert.Equal(180, result.SelectedRotation);
+        Assert.Equal(4, ocr.CallCount);
+    }
+
+    [Fact]
+    public async Task ReadBestAsync_SelectsCriticalEvidence_WhenInitialOcrHasManyWordsButNoDateOrTotal()
+    {
+        var ocr = new OcrFake(image => image[0] == 180 ? UsefulOcr() : OcrWithWords(10));
+        var service = CreateService(ocr, []);
+
+        var result = await service.ReadBestAsync([0]);
+
+        Assert.Equal(180, result.SelectedRotation);
+        Assert.Equal([180], result.Image);
+        Assert.Equal(new DateOnly(2026, 8, 18), OcrEvidenceDate(result.OcrResult));
+        Assert.Equal(12.50m, OcrEvidenceTotal(result.OcrResult));
+        Assert.Equal(4, ocr.CallCount);
+    }
+
+    [Fact]
+    public async Task ReadBestAsync_UsesFallback_WhenInitialOcrHasCriticalFieldsButTooFewWords()
+    {
+        var ocr = new OcrFake(image => image[0] == 90 ? UsefulOcr() : CriticalFieldsOcr(2));
+        var service = CreateService(ocr, []);
+
+        var result = await service.ReadBestAsync([0]);
+
+        Assert.Equal(90, result.SelectedRotation);
+        Assert.Equal(4, ocr.CallCount);
+    }
+
     [Theory]
     [InlineData(90)]
     [InlineData(180)]
@@ -68,6 +119,18 @@ public sealed class FallbackOcrOrientationServiceTests
     public async Task ReadBestAsync_KeepsInitialImage_WhenNoOrientationHasUsefulText()
     {
         var ocr = new OcrFake(_ => PoorOcr());
+        var service = CreateService(ocr, []);
+
+        var result = await service.ReadBestAsync([0]);
+
+        Assert.Equal(0, result.SelectedRotation);
+        Assert.Equal(4, ocr.CallCount);
+    }
+
+    [Fact]
+    public async Task ReadBestAsync_KeepsBestAvailableCandidate_WhenNoOrientationHasDateOrTotal()
+    {
+        var ocr = new OcrFake(_ => OcrWithWords(10));
         var service = CreateService(ocr, []);
 
         var result = await service.ReadBestAsync([0]);
@@ -127,6 +190,27 @@ public sealed class FallbackOcrOrientationServiceTests
         RawText = "texto",
         Words = Enumerable.Range(0, count).Select(index => new OcrWord { Text = $"palabra{index}" }).ToArray()
     };
+
+    private static OcrResult OcrWithDateOnly(int count) => new()
+    {
+        RawText = "FECHA 18/08/2026",
+        Words = CreateWords(count)
+    };
+
+    private static OcrResult OcrWithTotalOnly(int count) => new()
+    {
+        RawText = "TOTAL 12,50",
+        Words = CreateWords(count)
+    };
+
+    private static OcrResult CriticalFieldsOcr(int count) => new()
+    {
+        RawText = "FECHA 18/08/2026 TOTAL 12,50",
+        Words = CreateWords(count)
+    };
+
+    private static IReadOnlyList<OcrWord> CreateWords(int count) =>
+        Enumerable.Range(0, count).Select(index => new OcrWord { Text = $"palabra{index}" }).ToArray();
 
     private static DateOnly? OcrEvidenceDate(OcrResult ocrResult) =>
         TicketValidator.Application.Services.OcrEvidenceAnalyzer.Analyze(ocrResult).Date;
