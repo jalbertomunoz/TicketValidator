@@ -17,7 +17,7 @@ public static class OcrEvidenceAnalyzer
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex TotalLabelPattern = new(
-        @"(?<!\w)(?:IMPORTE\s+PAGADO|A\s+PAGAR|TOTAL|IMPORTE)(?!\w)",
+        @"(?<!\w)(?:TOTAL\s+A\s+PAGAR|IMPORTE\s+TOTAL|TOTAL\s+IMPUESTOS\s+INCL(?:UIDOS?|\.)|TOTAL\s+IVA\s+INCLUIDO|A\s+PAGAR|TOTAL\s+PAGADO|IMPORTE\s+PAGADO|TOTAL)(?!\w)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex AmountPattern = new(
@@ -29,6 +29,7 @@ public static class OcrEvidenceAnalyzer
         ArgumentNullException.ThrowIfNull(ocrResult);
 
         var words = ocrResult.Words.Where(word => !string.IsNullOrWhiteSpace(word.Text)).ToArray();
+        var wordsText = string.Join(' ', words.Select(word => word.Text));
         var evidenceText = GetEvidenceText(ocrResult.RawText, words);
 
         return new OcrEvidenceAnalysis
@@ -36,7 +37,7 @@ public static class OcrEvidenceAnalyzer
             IsReadable = !string.IsNullOrWhiteSpace(ocrResult.RawText) || words.Length > 0,
             WordCount = words.Length,
             Date = FindOcrDate(evidenceText),
-            Total = FindOcrTotal(evidenceText)
+            Total = FindOcrTotal(ocrResult.RawText) ?? FindOcrTotal(wordsText)
         };
     }
 
@@ -107,9 +108,15 @@ public static class OcrEvidenceAnalyzer
 
     private static int GetLabelPriority(string label) => label.ToUpperInvariant() switch
     {
-        "IMPORTE PAGADO" or "A PAGAR" => 0,
+        "TOTAL A PAGAR"
+            or "IMPORTE TOTAL"
+            or "TOTAL IMPUESTOS INCLUIDOS"
+            or "TOTAL IMPUESTOS INCL."
+            or "TOTAL IVA INCLUIDO"
+            or "A PAGAR" => 0,
         "TOTAL" => 1,
-        _ => 2
+        "TOTAL PAGADO" or "IMPORTE PAGADO" => 2,
+        _ => 3
     };
 
     private static bool TryParseAmount(string text, out decimal amount)

@@ -88,6 +88,47 @@ public sealed class TicketVerificationServiceTests
     }
 
     [Fact]
+    public void Verify_PrefersExplicitTotalLineOverProductAmounts()
+    {
+        var result = Verify(
+            """
+            TICKETVALIDATOR
+            CIF B12345678
+            FECHA 16/08/2026
+
+            MENU DEL DIA 10,00
+            AGUA 2,50
+
+            TOTAL 12,50
+            """,
+            visualTotal: 12.50m);
+
+        Assert.Equal(12.50m, result.Verification.OcrTotal);
+        Assert.NotEqual(2.50m, result.Verification.OcrTotal);
+        Assert.True(result.Verification.TotalMatch);
+    }
+
+    [Theory]
+    [InlineData("BASE 13,64\nCUOTA 1,36\nTOTAL IMPUESTOS INCL. 15,00", 15.00)]
+    [InlineData("TOTAL 15,00\nEFECTIVO 15,00", 15.00)]
+    [InlineData("ENTREGADO 20,00\nCAMBIO 5,00\nTOTAL 15,00", 15.00)]
+    [InlineData("SUBTOTAL 12,00\nTOTAL 15,00", 15.00)]
+    public void Verify_PrefersExplicitTotalOverOtherMonetaryLines(string rawText, decimal expectedTotal)
+    {
+        var result = Verify(rawText);
+
+        Assert.Equal(expectedTotal, result.Verification.OcrTotal);
+    }
+
+    [Fact]
+    public void Verify_LeavesOcrTotalNull_WhenNoExplicitTotalLabelExists()
+    {
+        var result = Verify("MENU 10,00\nAGUA 2,50\nBASE 12,50");
+
+        Assert.Null(result.Verification.OcrTotal);
+    }
+
+    [Fact]
     public void Verify_ExtractsTotalAssociatedWithPaymentLabel()
     {
         var result = Verify("IMPORTE PAGADO: 1.234,56", visualTotal: 1234.56m);
@@ -99,6 +140,16 @@ public sealed class TicketVerificationServiceTests
     public void Verify_ParsesUsThousandsFormat()
     {
         var result = Verify("A PAGAR: 1,234.56", visualTotal: 1234.56m);
+
+        Assert.Equal(1234.56m, result.Verification.OcrTotal);
+    }
+
+    [Theory]
+    [InlineData("TOTAL 1.234,56")]
+    [InlineData("TOTAL 1,234.56")]
+    public void Verify_ParsesThousandsFormatsWithTotalLabel(string rawText)
+    {
+        var result = Verify(rawText);
 
         Assert.Equal(1234.56m, result.Verification.OcrTotal);
     }
