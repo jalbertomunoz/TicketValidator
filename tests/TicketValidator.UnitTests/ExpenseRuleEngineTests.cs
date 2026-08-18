@@ -166,6 +166,18 @@ public sealed class ExpenseRuleEngineTests
     }
 
     [Fact]
+    public void Evaluate_PrioritizesDateMismatchOverMissingTotal()
+    {
+        var decision = Evaluate(verification: ValidVerification(
+            dateMatch: false,
+            ocrTotal: null,
+            includeVisualTotal: false));
+
+        Assert.Equal(AnalysisStatus.ReviewRequired, decision.Status);
+        Assert.Equal(ReasonCode.DateMismatch, decision.ReasonCode);
+    }
+
+    [Fact]
     public void Evaluate_PrioritizesManipulationOverDateMismatch()
     {
         var decision = Evaluate(verification: ValidVerification(
@@ -186,21 +198,52 @@ public sealed class ExpenseRuleEngineTests
     }
 
     [Fact]
-    public void Evaluate_RequiresReviewWhenOcrTotalIsMissing()
+    public void Evaluate_ApprovesWhenVisualTotalExistsAndOcrTotalIsMissing()
     {
         var decision = Evaluate(verification: ValidVerification(ocrTotal: null));
+
+        Assert.Equal(AnalysisStatus.Approved, decision.Status);
+        Assert.Equal(ReasonCode.Ok, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_ApprovesWhenVisualDateExistsAndOcrDateIsMissing()
+    {
+        var decision = Evaluate(verification: ValidVerification(includeOcrDate: false));
+
+        Assert.Equal(AnalysisStatus.Approved, decision.Status);
+        Assert.Equal(ReasonCode.Ok, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_RequiresReviewWhenBothSourcesDoNotProvideTotal()
+    {
+        var decision = Evaluate(verification: ValidVerification(
+            ocrTotal: null,
+            includeVisualTotal: false));
 
         Assert.Equal(AnalysisStatus.ReviewRequired, decision.Status);
         Assert.Equal(ReasonCode.ErrSinTotal, decision.ReasonCode);
     }
 
     [Fact]
-    public void Evaluate_RequiresReviewWhenOcrDateIsMissing()
+    public void Evaluate_RequiresReviewWhenBothSourcesDoNotProvideDate()
     {
-        var decision = Evaluate(verification: ValidVerification(includeOcrDate: false));
+        var decision = Evaluate(verification: ValidVerification(
+            includeOcrDate: false,
+            includeVisualDate: false));
 
         Assert.Equal(AnalysisStatus.ReviewRequired, decision.Status);
         Assert.Equal(ReasonCode.ErrSinFecha, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_RequiresReviewWhenOnlyOcrProvidesCriticalField()
+    {
+        var decision = Evaluate(verification: ValidVerification(includeVisualDate: false));
+
+        Assert.Equal(AnalysisStatus.ReviewRequired, decision.Status);
+        Assert.Equal(ReasonCode.OcrLowConfidence, decision.ReasonCode);
     }
 
     [Fact]
@@ -238,16 +281,18 @@ public sealed class ExpenseRuleEngineTests
         bool? manipulationDetected = false,
         decimal? ocrTotal = 12.50m,
         bool includeOcrDate = true,
+        bool includeVisualDate = true,
+        bool includeVisualTotal = true,
         DocumentType? visualDocumentType = null) => new()
     {
         OcrReadable = ocrReadable,
         VisualDocumentType = visualDocumentType,
         DateMatch = dateMatch,
         OcrDate = includeOcrDate ? new DateOnly(2026, 8, 15) : null,
-        VisualDate = new DateOnly(2026, 8, 15),
+        VisualDate = includeVisualDate ? new DateOnly(2026, 8, 15) : null,
         TotalMatch = totalMatch,
         OcrTotal = ocrTotal,
-        VisualTotal = 12.50m,
+        VisualTotal = includeVisualTotal ? 12.50m : null,
         ManipulationDetected = manipulationDetected
     };
 }

@@ -39,14 +39,19 @@ Respuesta REST
 Principio fundamental:
 
 ```text
-OCR = evidencia textual
+IA visual = fuente principal de lectura
 
-IA = interpretación
+OCR = fuente independiente de contraste
+
+IA sobre OCR = extracción y estructuración auxiliar
 
 Código = decisión
 ```
 
-La IA nunca debe convertirse en la única fuente de verdad para campos críticos.
+Esta política se ajustó tras validar experimentalmente el MVP con tickets reales:
+la lectura visual de GPT-4.1 resultó más fiable para fecha y total en documentos
+donde Tesseract no obtenía todos los datos. El código conserva ambas evidencias y
+mantiene la decisión final determinista.
 
 ---
 
@@ -277,7 +282,7 @@ Evitar introducir lógica HTTP dentro de este caso de uso.
 
 ## 9. Reglas sobre OCR
 
-Tesseract constituye la fuente principal de evidencia textual.
+Tesseract constituye una fuente independiente de evidencia textual y contraste.
 
 El resultado OCR debe conservar, cuando sea posible:
 
@@ -292,11 +297,17 @@ Los umbrales se determinarán posteriormente mediante experimentación con ticke
 
 La configuración de confianza deberá mantenerse fuera de las reglas de negocio.
 
+`OcrReadable` solo significa que existe evidencia textual OCR. No implica que el
+documento sea ilegible cuando OCR está vacío: una clasificación visual de ticket
+o factura con fecha o total visuales es evidencia suficiente para continuar.
+
 ---
 
 ## 10. Reglas sobre Inteligencia Artificial
 
-GPT-4.1 se utiliza para interpretación y clasificación.
+GPT-4.1 visual es la fuente principal de lectura de fecha y total directamente de
+la imagen. GPT-4.1 sobre texto OCR se utiliza para extracción, estructuración y
+clasificación auxiliar.
 
 No debe utilizarse como sustituto del OCR cuando se necesite evidencia textual.
 
@@ -329,31 +340,24 @@ VisualManipulationPrompt
 
 ## 11. Prevención de alucinaciones
 
-Nunca aceptar automáticamente información inventada por la IA.
-
-Ejemplo:
-
-```text
-OCR:
-1?/08/2026
-
-IA:
-14/08/2026
-```
-
-La fecha `14/08/2026` no puede considerarse verificada únicamente porque la IA la haya propuesto.
-
-Para campos críticos:
+Nunca reconstruir ni completar información que ninguna fuente haya leído. Para
+fecha y total, la lectura visual es el valor principal y OCR aporta contraste:
 
 ```text
-OCR + IA coinciden
-→ dato verificable
+Visual + OCR coinciden
+→ dato corroborado
 
-OCR + IA discrepan
-→ REVIEW_REQUIRED
+Visual existe + OCR no existe
+→ usar valor visual; Match = null
 
-OCR no contiene evidencia suficiente
-→ no aceptar automáticamente el valor de IA
+Visual y OCR discrepan
+→ REVIEW_REQUIRED y código de discrepancia
+
+Ambos no existen
+→ campo ausente
+
+Solo OCR existe
+→ REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
 ```
 
 Campos críticos iniciales:
@@ -516,7 +520,10 @@ Si fuera necesario añadir alguno, actualizar también la documentación y los t
 
 ## 17. REVIEW_REQUIRED
 
-Usar `REVIEW_REQUIRED` cuando exista evidencia pero haya una discrepancia que impida tomar una decisión fiable.
+Usar `REVIEW_REQUIRED` cuando exista evidencia pero haya una discrepancia o una
+lectura crítica exclusiva de OCR que impida tomar una decisión fiable. En este
+último caso se usa el código existente `OCR_LOW_CONFIDENCE`; no representa un
+umbral numérico, sino que falta la lectura visual principal.
 
 Ejemplos:
 
@@ -541,13 +548,16 @@ La prioridad inicial de las reglas es:
 
 ```text
 1. ERR_NO_DOCUMENTO
-2. ERR_NO_LEGIBLE
+2. ERR_NO_LEGIBLE, solo sin OCR y sin lectura visual suficiente
 3. ERR_DOCUMENTO_MANIPULADO
 4. ERR_BEBIDA_ALCOHOLICA
 5. ERR_TIPO_GASTO_INCOHERENTE
-6. ERR_SIN_TOTAL
-7. ERR_SIN_FECHA
-8. OK
+6. DATE_MISMATCH
+7. TOTAL_MISMATCH
+8. ERR_SIN_TOTAL, solo sin total visual ni OCR
+9. ERR_SIN_FECHA, solo sin fecha visual ni OCR
+10. OCR_LOW_CONFIDENCE, solo cuando un campo crítico existe exclusivamente en OCR
+11. OK
 ```
 
 `REVIEW_REQUIRED` se utiliza para discrepancias cuando no existe una regla de mayor prioridad que determine un rechazo.
@@ -717,20 +727,20 @@ Bar La Cerveza no provoca rechazo
 
 Empleado Vino no provoca rechazo
 
-fecha OCR ≠ fecha IA
+fecha OCR ≠ fecha visual
 → REVIEW_REQUIRED
 
-total OCR ≠ total IA
+total OCR ≠ total visual
 → REVIEW_REQUIRED
 
-IA proporciona una fecha sin evidencia OCR
-→ no aceptar automáticamente
+fecha o total visual con OCR ausente
+→ conservar el valor visual sin marcarlo como corroborado
 
 ticket girado
 → intentar rotar antes del OCR
 
-ticket borroso
-→ no permitir que IA complete campos como evidencia
+OCR vacío con ticket visual y fecha o total visual
+→ no marcar automáticamente UNREADABLE
 ```
 
 ---

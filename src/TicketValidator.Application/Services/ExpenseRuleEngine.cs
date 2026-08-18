@@ -34,12 +34,12 @@ public sealed class ExpenseRuleEngine : IExpenseRuleEngine
                 "El documento proporcionado no es un ticket ni una factura.");
         }
 
-        if (!verification.OcrReadable)
+        if (!verification.OcrReadable && !HasSufficientVisualEvidence(verification))
         {
             return CreateDecision(
                 AnalysisStatus.Unreadable,
                 ReasonCode.ErrNoLegible,
-                "No se ha encontrado evidencia textual OCR.");
+                "No se ha encontrado evidencia textual OCR ni lectura visual suficiente.");
         }
 
         if (verification.ManipulationDetected is true)
@@ -71,28 +71,12 @@ public sealed class ExpenseRuleEngine : IExpenseRuleEngine
                 message);
         }
 
-        if (verification.OcrTotal is null)
-        {
-            return CreateDecision(
-                AnalysisStatus.ReviewRequired,
-                ReasonCode.ErrSinTotal,
-                "No se ha podido determinar el importe total mediante OCR.");
-        }
-
-        if (verification.OcrDate is null)
-        {
-            return CreateDecision(
-                AnalysisStatus.ReviewRequired,
-                ReasonCode.ErrSinFecha,
-                "No se ha podido determinar la fecha mediante OCR.");
-        }
-
         if (verification.DateMatch is false)
         {
             return CreateDecision(
                 AnalysisStatus.ReviewRequired,
                 ReasonCode.DateMismatch,
-                "Existe una discrepancia entre OCR e IA en la fecha.");
+                "Existe una discrepancia entre OCR e IA visual en la fecha.");
         }
 
         if (verification.TotalMatch is false)
@@ -100,7 +84,32 @@ public sealed class ExpenseRuleEngine : IExpenseRuleEngine
             return CreateDecision(
                 AnalysisStatus.ReviewRequired,
                 ReasonCode.TotalMismatch,
-                "Existe una discrepancia entre OCR e IA en el importe total.");
+                "Existe una discrepancia entre OCR e IA visual en el importe total.");
+        }
+
+        if (verification.VisualTotal is null && verification.OcrTotal is null)
+        {
+            return CreateDecision(
+                AnalysisStatus.ReviewRequired,
+                ReasonCode.ErrSinTotal,
+                "No se ha podido determinar el importe total.");
+        }
+
+        if (verification.VisualDate is null && verification.OcrDate is null)
+        {
+            return CreateDecision(
+                AnalysisStatus.ReviewRequired,
+                ReasonCode.ErrSinFecha,
+                "No se ha podido determinar la fecha.");
+        }
+
+        if ((verification.VisualDate is null && verification.OcrDate is not null)
+            || (verification.VisualTotal is null && verification.OcrTotal is not null))
+        {
+            return CreateDecision(
+                AnalysisStatus.ReviewRequired,
+                ReasonCode.OcrLowConfidence,
+                "Al menos un campo crítico solo dispone de evidencia OCR y requiere revisión visual.");
         }
 
         return CreateDecision(AnalysisStatus.Approved, ReasonCode.Ok, null);
@@ -115,4 +124,8 @@ public sealed class ExpenseRuleEngine : IExpenseRuleEngine
             ReasonCode = reasonCode,
             Message = message
         };
+
+    private static bool HasSufficientVisualEvidence(VerificationData verification) =>
+        verification.VisualDocumentType is DocumentType.Receipt or DocumentType.Invoice
+        && (verification.VisualDate is not null || verification.VisualTotal is not null);
 }

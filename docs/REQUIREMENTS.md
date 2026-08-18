@@ -23,14 +23,19 @@ A partir de esta información:
 El principio fundamental del sistema es:
 
 ```text
-OCR = evidencia
+IA visual = fuente principal de lectura
 
-IA = interpretación
+OCR = fuente independiente de contraste
+
+IA sobre OCR = extracción y estructuración auxiliar
 
 Código = decisión
 ```
 
-La Inteligencia Artificial no debe ser la única fuente de verdad para los campos críticos del documento.
+Esta política se ajustó tras validación experimental del MVP con tickets reales:
+GPT-4.1 visual leyó fecha y total correctamente en documentos donde Tesseract
+perdió información. El código conserva ambas evidencias y decide de forma
+determinista.
 
 ---
 
@@ -305,19 +310,35 @@ Extracción IA        Análisis visual IA
 
 # 10. Política de evidencia
 
-El OCR será la fuente principal de evidencia textual.
+La IA visual es la fuente principal de lectura de fecha y total directamente de
+la imagen. OCR conserva evidencia textual independiente para contrastar esos
+campos. La IA de extracción basada en texto OCR estructura evidencia auxiliar
+para establecimiento, CIF, número de factura, hora, dirección, IVA y productos.
 
-La IA se utilizará para:
+Para fecha y total:
 
-- Interpretar.
-- Normalizar.
-- Estructurar.
-- Clasificar.
-- Comprender contexto.
+```text
+Visual + OCR coinciden
+→ dato corroborado
 
-La IA de extracción basada en texto OCR estructura esa evidencia, pero no es una segunda fuente independiente para fecha ni total. La IA visual lee esos campos directamente desde la imagen y se contrasta con OCR.
+Visual existe + OCR no existe
+→ se utiliza el valor visual; Match = null
 
-La IA no podrá sustituir automáticamente información ausente en OCR cuando dicha información sea necesaria para aprobar o rechazar un documento.
+Visual y OCR difieren
+→ REVIEW_REQUIRED y código de discrepancia
+
+Solo OCR existe
+→ REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
+
+Ambas fuentes no obtienen el dato
+→ ERR_SIN_FECHA o ERR_SIN_TOTAL
+```
+
+`OcrReadable` solo indica que existe evidencia textual OCR. No representa la
+legibilidad general del documento: si OCR está vacío pero la visión clasifica un
+ticket o factura y obtiene fecha o total, no se devuelve automáticamente
+`UNREADABLE`. Si tampoco existe evidencia visual suficiente, se devuelve
+`UNREADABLE / ERR_NO_LEGIBLE`.
 
 ---
 
@@ -336,21 +357,21 @@ Conceptos que puedan provocar un rechazo
 
 # 12. Política de discrepancias
 
-## 12.1 OCR e IA coinciden
+## 12.1 IA visual y OCR coinciden
 
 ```text
-OCR claro
+IA visual
 +
-IA coincide
+OCR coincide
 
 → campo verificado
 ```
 
 ---
 
-## 12.2 OCR e IA discrepan
+## 12.2 IA visual y OCR discrepan
 
-Cuando OCR e IA proporcionen valores diferentes para un campo crítico:
+Cuando OCR e IA visual proporcionen valores diferentes para un campo crítico:
 
 ```text
 → REVIEW_REQUIRED
@@ -362,7 +383,7 @@ Ejemplo:
 OCR:
 14/08/2026
 
-IA:
+IA visual:
 17/08/2026
 
 Resultado:
@@ -372,34 +393,35 @@ DATE_MISMATCH
 
 ---
 
-## 12.3 OCR insuficiente e IA propone un dato
+## 12.3 IA visual obtiene el dato y OCR no
 
 Ejemplo:
 
 ```text
-OCR:
-1?/08/2026
-
-IA:
+IA visual:
 14/08/2026
+
+OCR:
+sin fecha
 ```
 
-El sistema no considerará automáticamente:
+El sistema utilizará:
 
 ```text
 14/08/2026
 ```
 
-como información verificada.
+como lectura principal sin marcarla como corroborada por OCR.
 
 ---
 
-## 12.4 OCR no detecta el dato
+## 12.4 Solo OCR obtiene el dato
 
-Si OCR no encuentra evidencia de un campo y la IA proporciona un valor:
+Si OCR encuentra un dato crítico y la IA visual no:
 
 ```text
-→ el valor de IA no constituye evidencia suficiente por sí solo
+→ conservar la evidencia OCR
+→ REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
 ```
 
 ---
@@ -741,7 +763,7 @@ Cuando no existan se podrá utilizar el número de líneas.
 
 ## RF-035 — Fecha obligatoria
 
-Si el documento es válido pero no puede determinarse la fecha:
+Si ninguna fuente puede determinar la fecha:
 
 ```text
 ERR_SIN_FECHA
@@ -751,7 +773,7 @@ ERR_SIN_FECHA
 
 ## RF-036 — Total obligatorio
 
-Si el documento es válido pero no puede determinarse el total:
+Si ninguna fuente puede determinar el total:
 
 ```text
 ERR_SIN_TOTAL
@@ -761,10 +783,10 @@ ERR_SIN_TOTAL
 
 ## RF-037 — Normalización de fecha
 
-Cuando la fecha pueda verificarse correctamente deberá devolverse en formato:
+Cuando la fecha pueda determinarse, el contrato JSON la devolverá en formato ISO:
 
 ```text
-dd/MM/yyyy
+yyyy-MM-dd
 ```
 
 ---
@@ -777,7 +799,7 @@ El sistema no deberá completar dígitos de una fecha que no puedan leerse con s
 
 ## RF-039 — Análisis visual
 
-El sistema deberá utilizar análisis visual para clasificar explícitamente ticket, factura, no documento o desconocido, detectar indicios visibles de manipulación y realizar una lectura independiente de fecha y total directamente desde la imagen.
+El sistema deberá utilizar análisis visual para clasificar explícitamente ticket, factura, no documento o desconocido, detectar indicios visibles de manipulación y realizar la lectura principal de fecha y total directamente desde la imagen.
 
 ---
 
@@ -896,21 +918,25 @@ La IA no seleccionará directamente el estado final.
 
 ---
 
-## RN-002 — OCR como evidencia
+## RN-002 — IA visual como lectura principal
 
-El OCR prevalece como fuente de evidencia textual.
-
----
-
-## RN-003 — IA como interpretación
-
-La IA podrá interpretar información existente, pero no sustituir evidencia ausente.
+La IA visual prevalece para fecha y total cuando obtiene valores directamente de
+la imagen.
 
 ---
 
-## RN-004 — Información inventada
+## RN-003 — OCR como contraste independiente
 
-Un dato proporcionado exclusivamente por IA no deberá considerarse automáticamente verificado.
+OCR conserva evidencia textual para contrastar fecha y total, y la extracción
+basada en OCR estructura los demás campos auxiliares.
+
+---
+
+## RN-004 — No reconstrucción
+
+Ninguna fuente podrá reconstruir dígitos o datos que no haya leído. Un dato
+visual sin OCR se utiliza como lectura principal, pero no se marca como
+corroborado.
 
 ---
 
@@ -1109,15 +1135,16 @@ El motor de reglas utilizará inicialmente la siguiente prioridad:
 
 ```text
 1. ERR_NO_DOCUMENTO, solo ante una clasificación visual explícita `NO_DOCUMENTO` sin evidencia OCR contradictoria de ticket o factura
-2. ERR_NO_LEGIBLE
+2. ERR_NO_LEGIBLE, solo sin OCR y sin lectura visual suficiente
 3. ERR_DOCUMENTO_MANIPULADO
 4. ERR_BEBIDA_ALCOHOLICA
 5. ERR_TIPO_GASTO_INCOHERENTE
-6. ERR_SIN_TOTAL
-7. ERR_SIN_FECHA
-8. DATE_MISMATCH
-9. TOTAL_MISMATCH
-10. OK
+6. DATE_MISMATCH
+7. TOTAL_MISMATCH
+8. ERR_SIN_TOTAL, solo sin total visual ni OCR
+9. ERR_SIN_FECHA, solo sin fecha visual ni OCR
+10. OCR_LOW_CONFIDENCE, solo cuando un campo crítico existe exclusivamente en OCR
+11. OK
 ```
 
 ---
@@ -1308,7 +1335,7 @@ expenseType
   "message": "Existe una discrepancia entre OCR e IA en la fecha.",
   "ticket": {
     "documentType": "TICKET",
-    "date": null,
+    "date": "2026-08-17",
     "total": 18.50,
     "products": []
   },
@@ -1498,7 +1525,8 @@ No inventar datos cuando la resolución no sea suficiente.
 
 ## CP-04 — Ticket borroso
 
-Si la IA propone una fecha que no puede verificarse mediante OCR:
+Si OCR está vacío y la IA visual tampoco obtiene tipo de documento, fecha, total
+ni evidencia visual suficiente:
 
 ```text
 UNREADABLE
@@ -1787,7 +1815,7 @@ El MVP se considerará completado cuando:
 - Exista análisis visual de indicios de manipulación.
 - Fecha y total puedan compararse entre OCR e IA.
 - Las discrepancias produzcan `REVIEW_REQUIRED`.
-- La IA no pueda introducir como evidencia datos ausentes en OCR.
+- La lectura visual de fecha y total se conserve aunque OCR no obtenga esos datos.
 - Las reglas se ejecuten mediante código.
 - El caso `CEREZAS` no sea rechazado como alcohol.
 - Una cerveza real pueda provocar rechazo.
@@ -1848,11 +1876,14 @@ Fichero
 Manipulación:
 Análisis visual
 
-OCR:
-Fuente principal de evidencia textual
+IA visual:
+Fuente principal de lectura de fecha y total
 
-IA:
-Interpretación semántica
+OCR:
+Fuente independiente de contraste
+
+IA sobre OCR:
+Extracción y estructuración auxiliar
 
 Decisión:
 Motor de reglas en código
@@ -1919,9 +1950,11 @@ Estas mejoras no son necesarias para completar el MVP.
 Ante cualquier duda durante la implementación deberá mantenerse el siguiente criterio:
 
 ```text
-OCR = evidencia
+IA visual = fuente principal de lectura
 
-IA = interpretación
+OCR = fuente independiente de contraste
+
+IA sobre OCR = extracción y estructuración auxiliar
 
 Código = decisión
 ```

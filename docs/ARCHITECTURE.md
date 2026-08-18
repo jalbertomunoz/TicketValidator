@@ -14,14 +14,18 @@ La arquitectura busca cumplir cuatro objetivos principales:
 El sistema sigue como principio fundamental:
 
 ```text
-OCR = evidencia textual
+IA visual = fuente principal de lectura
 
-IA = interpretación
+OCR = fuente independiente de contraste
+
+IA sobre OCR = extracción y estructuración auxiliar
 
 Código = decisión
 ```
 
-La Inteligencia Artificial no constituye por sí sola una fuente de verdad para los campos críticos del documento.
+La política se ajustó tras pruebas experimentales con tickets reales: la lectura
+visual de GPT-4.1 resultó más fiable para fecha y total cuando Tesseract pierde
+información. El código conserva ambas fuentes y toma la decisión final.
 
 ---
 
@@ -231,6 +235,11 @@ address
 vat
 products
 ```
+
+Para `date` y `total`, `AnalyzeTicketHandler` prioriza los valores visuales
+cuando existen. Si no hay valor visual conserva el valor estructurado de la
+extracción OCR para trazabilidad, pero el motor exige revisión cuando un campo
+crítico solo dispone de OCR.
 
 ---
 
@@ -503,6 +512,12 @@ versión del MVP.
 ## 6.8 ITicketVerificationService
 
 Responsable de comparar la evidencia OCR con la lectura independiente de la IA visual.
+La lectura visual es la fuente principal de fecha y total; OCR es el contraste.
+Una coincidencia marca `Match = true`, una ausencia de OCR deja `Match = null`
+y una discrepancia marca `Match = false`.
+`OcrReadable` solo expresa la existencia de texto OCR; no determina por sí solo
+la legibilidad global cuando la lectura visual identifica un ticket o factura y
+obtiene fecha o total.
 
 Campos críticos iniciales:
 
@@ -710,7 +725,8 @@ implementado por:
 OpenAiVisualAnalysisService
 ```
 
-Esta operación analizará indicios visibles de manipulación y leerá fecha y total directamente desde la imagen para compararlos con OCR.
+Esta operación analizará indicios visibles de manipulación y leerá fecha y total
+directamente desde la imagen como fuente principal, contrastándolos con OCR.
 
 No debe extraer productos ni aplicar reglas de gasto.
 
@@ -834,7 +850,8 @@ será:
 TesseractOcrService
 ```
 
-Tesseract se utilizará como fuente principal de evidencia textual.
+Tesseract se utilizará como fuente independiente de evidencia textual y
+contraste para la lectura visual principal de fecha y total.
 
 Se configurará inicialmente para idioma español.
 
@@ -1029,9 +1046,9 @@ OCR_LOW_CONFIDENCE
 ## 18.1 Coincidencia
 
 ```text
-OCR claro
+IA visual
 +
-IA coincide
+OCR coincide
 
 → campo verificado
 ```
@@ -1041,9 +1058,9 @@ IA coincide
 ## 18.2 Discrepancia
 
 ```text
-OCR claro
+OCR
 +
-IA diferente
+IA visual diferente
 
 → REVIEW_REQUIRED
 ```
@@ -1054,7 +1071,7 @@ Ejemplo:
 OCR:
 14/08/2026
 
-IA:
+IA visual:
 17/08/2026
 
 → DATE_MISMATCH
@@ -1062,14 +1079,27 @@ IA:
 
 ---
 
-## 18.3 OCR insuficiente
+## 18.3 OCR no detecta el dato
 
 ```text
-OCR no puede determinar el dato
+IA visual obtiene el dato
 +
-IA propone un valor
+OCR no lo obtiene
 
-→ no utilizar automáticamente el valor de IA
+→ usar la lectura visual principal
+→ `Match = null`, sin corroboración OCR
+```
+
+---
+
+## 18.4 Solo OCR
+
+```text
+IA visual no obtiene el dato
++
+OCR lo obtiene
+
+→ REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
 ```
 
 ---
@@ -1082,15 +1112,16 @@ Orden inicial de prioridad:
 
 ```text
 1. ERR_NO_DOCUMENTO (solo ante `VisualDocumentType = NotDocument` y sin evidencia OCR contradictoria de ticket o factura)
-2. ERR_NO_LEGIBLE
+2. ERR_NO_LEGIBLE, solo sin OCR y sin lectura visual suficiente
 3. ERR_DOCUMENTO_MANIPULADO
 4. ERR_BEBIDA_ALCOHOLICA
 5. ERR_TIPO_GASTO_INCOHERENTE
-6. ERR_SIN_TOTAL
-7. ERR_SIN_FECHA
-8. DATE_MISMATCH
-9. TOTAL_MISMATCH
-10. OK
+6. DATE_MISMATCH
+7. TOTAL_MISMATCH
+8. ERR_SIN_TOTAL, solo sin total visual ni OCR
+9. ERR_SIN_FECHA, solo sin fecha visual ni OCR
+10. OCR_LOW_CONFIDENCE, cuando un campo crítico solo tiene OCR
+11. OK
 ```
 
 `REVIEW_REQUIRED` se utilizará para discrepancias donde no exista una causa de rechazo de prioridad superior.
@@ -1431,9 +1462,11 @@ Api
 Y el principio funcional:
 
 ```text
-OCR = evidencia
+IA visual = fuente principal de lectura
 
-IA = interpretación
+OCR = fuente independiente de contraste
+
+IA sobre OCR = extracción y estructuración auxiliar
 
 Código = decisión
 ```

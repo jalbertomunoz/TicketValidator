@@ -87,8 +87,9 @@ public sealed class AnalyzeTicketHandler
                 ocrResult,
                 classifiedExtraction,
                 visualAnalysis);
+            var finalTicket = WithVisualCriticalFields(classifiedTicket, visualAnalysis);
             var decision = _expenseRuleEngine.Evaluate(
-                classifiedTicket,
+                finalTicket,
                 verificationResult.Verification,
                 command.ExpenseType,
                 coherence);
@@ -106,7 +107,7 @@ public sealed class AnalyzeTicketHandler
             {
                 AnalysisId = analysisId,
                 OcrRawText = ocrResult.RawText,
-                Ticket = classifiedTicket,
+                Ticket = finalTicket,
                 Verification = verificationResult.Verification,
                 Decision = decision
             };
@@ -152,6 +153,23 @@ public sealed class AnalyzeTicketHandler
         Time = ticket.Time,
         Total = ticket.Total,
         Products = products,
+        VatDetails = ticket.VatDetails
+    };
+
+    private static TicketData WithVisualCriticalFields(
+        TicketData ticket,
+        VisualAnalysisResult visualAnalysis) => new()
+    {
+        DocumentType = ticket.DocumentType,
+        EstablishmentName = ticket.EstablishmentName,
+        EstablishmentType = ticket.EstablishmentType,
+        Address = ticket.Address,
+        TaxId = ticket.TaxId,
+        InvoiceNumber = ticket.InvoiceNumber,
+        Date = visualAnalysis.VisualDate ?? ticket.Date,
+        Time = ticket.Time,
+        Total = visualAnalysis.VisualTotal ?? ticket.Total,
+        Products = ticket.Products,
         VatDetails = ticket.VatDetails
     };
 }

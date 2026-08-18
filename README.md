@@ -54,6 +54,20 @@ del pipeline y de la API sustituyen las dependencias externas por fakes
 controlados. Las pruebas reales contra OpenAI se ejecutan manualmente y quedan
 fuera de la suite normal.
 
+## Política de lectura
+
+Tras pruebas experimentales del MVP con tickets reales, la IA visual es la
+fuente principal para leer fecha y total directamente de la imagen. OCR se
+conserva como evidencia textual independiente para contrastar esos campos, y la
+IA sobre OCR mantiene la extracción estructurada auxiliar. El código toma siempre
+la decisión final.
+
+Si la lectura visual existe y OCR no obtiene el campo, el valor visual se usa sin
+marcarlo como corroborado. Si ambos valores difieren, el resultado es revisión.
+Si solo existe OCR para un campo crítico, se solicita revisión conservadora.
+`ocrReadable` indica únicamente que existe texto OCR; una lectura visual
+suficiente evita que un OCR vacío implique automáticamente `UNREADABLE`.
+
 ## Docker
 
 Build:

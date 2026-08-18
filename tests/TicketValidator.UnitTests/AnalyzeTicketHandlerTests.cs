@@ -118,6 +118,45 @@ public sealed class AnalyzeTicketHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_PrioritizesVisualDateOverExtractedDate()
+    {
+        var fakes = new HandlerFakes
+        {
+            AiExtraction = new AiTicketExtraction
+            {
+                Ticket = new TicketData { Date = new DateOnly(2026, 2, 25) }
+            }
+        };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult
+        {
+            VisualDate = new DateOnly(2026, 2, 26)
+        };
+
+        var result = await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
+
+        Assert.Equal(new DateOnly(2026, 2, 26), result.Ticket.Date);
+        Assert.Equal(new DateOnly(2026, 2, 26), fakes.RuleEngine.ReceivedTicket!.Date);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PrioritizesVisualTotalOverExtractedTotal()
+    {
+        var fakes = new HandlerFakes
+        {
+            AiExtraction = new AiTicketExtraction
+            {
+                Ticket = new TicketData { Total = 6.58m }
+            }
+        };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult { VisualTotal = 6.50m };
+
+        var result = await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
+
+        Assert.Equal(6.50m, result.Ticket.Total);
+        Assert.Equal(6.50m, fakes.RuleEngine.ReceivedTicket!.Total);
+    }
+
+    [Fact]
     public async Task HandleAsync_AllowsAnEmptyProductCollection()
     {
         var fakes = new HandlerFakes
@@ -157,6 +196,26 @@ public sealed class AnalyzeTicketHandlerTests
 
         Assert.Equal(AnalysisStatus.Unreadable, result.Decision.Status);
         Assert.Equal(ReasonCode.ErrNoLegible, result.Decision.ReasonCode);
+        AssertNoOcrEvidenceServicesWereCalled(fakes);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DoesNotReturnUnreadable_WhenOcrIsEmptyAndVisualReadsCriticalFields()
+    {
+        var fakes = new HandlerFakes { OcrResult = new OcrResult() };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult
+        {
+            VisualDocumentType = DocumentType.Receipt,
+            VisualDate = new DateOnly(2026, 2, 26),
+            VisualTotal = 6.50m
+        };
+
+        var result = await HandleWithRealVerificationAndRulesAsync(fakes);
+
+        Assert.Equal(AnalysisStatus.Approved, result.Decision.Status);
+        Assert.Equal(ReasonCode.Ok, result.Decision.ReasonCode);
+        Assert.Equal(new DateOnly(2026, 2, 26), result.Ticket.Date);
+        Assert.Equal(6.50m, result.Ticket.Total);
         AssertNoOcrEvidenceServicesWereCalled(fakes);
     }
 

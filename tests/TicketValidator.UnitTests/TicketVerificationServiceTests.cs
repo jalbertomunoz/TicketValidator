@@ -12,7 +12,7 @@ public sealed class TicketVerificationServiceTests
     [Fact]
     public void Verify_SetsDateMatchTrue_WhenOcrAndVisualDatesAreEqual()
     {
-        var result = Verify("FECHA: 15/08/2026", visualDate: new DateOnly(2026, 8, 15));
+        var result = Verify("FECHA: 26/02/2026", visualDate: new DateOnly(2026, 2, 26));
 
         Assert.True(result.Verification.DateMatch);
     }
@@ -20,7 +20,7 @@ public sealed class TicketVerificationServiceTests
     [Fact]
     public void Verify_SetsDateMatchFalse_WhenOcrAndVisualDatesDiffer()
     {
-        var result = Verify("FECHA: 15/08/2026", visualDate: new DateOnly(2026, 8, 16));
+        var result = Verify("FECHA: 26/02/2041", visualDate: new DateOnly(2026, 2, 26));
 
         Assert.False(result.Verification.DateMatch);
     }
@@ -56,7 +56,7 @@ public sealed class TicketVerificationServiceTests
     [Fact]
     public void Verify_SetsTotalMatchTrue_WhenOcrAndVisualTotalsAreEqual()
     {
-        var result = Verify("TOTAL: 12,50", visualTotal: 12.50m);
+        var result = Verify("TOTAL: 6,50", visualTotal: 6.50m);
 
         Assert.True(result.Verification.TotalMatch);
     }
@@ -64,7 +64,7 @@ public sealed class TicketVerificationServiceTests
     [Fact]
     public void Verify_SetsTotalMatchFalse_WhenOcrAndVisualTotalsDiffer()
     {
-        var result = Verify("TOTAL: 12.50", visualTotal: 13m);
+        var result = Verify("TOTAL: 6.58", visualTotal: 6.50m);
 
         Assert.False(result.Verification.TotalMatch);
     }
