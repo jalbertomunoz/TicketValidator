@@ -16,6 +16,17 @@ public sealed class SwaggerIntegrationTests : IClassFixture<WebApplicationFactor
     }
 
     [Fact]
+    public async Task WebDemoRoot_ReturnsHtml()
+    {
+        var response = await _client.GetAsync("/");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.EnsureSuccessStatusCode();
+        Assert.Contains("TicketValidator", content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Arrastra aquí tu ticket", content, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task SwaggerUi_ReturnsSuccess()
     {
         var response = await _client.GetAsync("/swagger/index.html");

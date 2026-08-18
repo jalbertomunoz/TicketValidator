@@ -70,3 +70,12 @@ docker run --rm -p 8080:8080 -e OpenAI__ApiKey="<TU_API_KEY>" ticketvalidator
 
 Swagger está disponible en `http://localhost:8080/swagger`. Para conservar los
 logs opcionalmente, añadir `-v ticketvalidator-logs:/app/logs` al comando.
+
+## Web Demo
+
+La interfaz web incluida en `wwwroot` es una herramienta auxiliar para pruebas
+manuales y demostración. No forma parte del núcleo funcional de TicketValidator
+ni contiene lógica de negocio.
+
+- Web demo: `http://localhost:<puerto>/`
+- Swagger: `http://localhost:<puerto>/swagger`

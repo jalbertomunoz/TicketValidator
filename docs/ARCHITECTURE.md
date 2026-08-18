@@ -892,6 +892,10 @@ Responsabilidades:
 
 No debe contener reglas de negocio.
 
+La API puede servir una interfaz estática auxiliar desde `wwwroot` para pruebas
+manuales y demostración. Esta interfaz solo consume el endpoint REST existente;
+no forma parte del núcleo funcional ni contiene lógica de negocio.
+
 ---
 
 ## 13.2 Estructura prevista

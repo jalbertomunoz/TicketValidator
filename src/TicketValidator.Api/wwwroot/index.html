@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TicketValidator | Demo</title>
+  <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">Herramienta auxiliar</p>
+      <h1>TicketValidator</h1>
+    </div>
+    <a href="/swagger" class="swagger-link">Abrir Swagger</a>
+  </header>
+
+  <main class="layout">
+    <section class="card upload-card" aria-labelledby="document-title">
+      <div class="section-heading">
+        <p class="eyebrow">Documento</p>
+        <h2 id="document-title">Carga un ticket</h2>
+      </div>
+
+      <input id="file-input" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" hidden>
+      <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-describedby="drop-help">
+        <p class="drop-title">Arrastra aquí tu ticket</p>
+        <p id="drop-help">o haz clic para seleccionarlo</p>
+        <p class="file-types">JPG, JPEG o PNG</p>
+      </div>
+
+      <div id="preview-panel" class="preview-panel" hidden>
+        <img id="preview-image" alt="Previsualización local del ticket seleccionado">
+        <p id="file-name" class="file-name"></p>
+      </div>
+    </section>
+
+    <section class="card analysis-card" aria-labelledby="analysis-title">
+      <div class="section-heading">
+        <p class="eyebrow">Análisis</p>
+        <h2 id="analysis-title">Enviar a la API</h2>
+      </div>
+
+      <label for="expense-type">Tipo de gasto</label>
+      <select id="expense-type">
+        <option value="Meals">Meals</option>
+        <option value="Diet">Diet</option>
+        <option value="Breakfast">Breakfast</option>
+        <option value="Lunch" selected>Lunch</option>
+        <option value="Dinner">Dinner</option>
+        <option value="Fuel">Fuel</option>
+        <option value="Accommodation">Accommodation</option>
+        <option value="Taxi">Taxi</option>
+        <option value="Parking">Parking</option>
+        <option value="Material">Material</option>
+        <option value="Highway">Highway</option>
+        <option value="Other">Other</option>
+      </select>
+
+      <button id="analyze-button" type="button">Analizar ticket</button>
+      <p id="request-state" class="request-state" aria-live="polite"></p>
+
+      <section id="result-panel" class="result-panel" hidden aria-live="polite">
+        <div class="result-summary">
+          <span id="status-badge" class="status-badge"></span>
+          <div>
+            <p class="label">Reason code</p>
+            <p id="reason-code" class="reason-code"></p>
+          </div>
+        </div>
+        <p id="result-message" class="result-message"></p>
+
+        <div class="result-section">
+          <h3>Ticket</h3>
+          <dl id="ticket-details" class="details-grid"></dl>
+          <dl id="address-details" class="details-grid secondary-details"></dl>
+          <div id="vat-section" hidden>
+            <h4>IVA</h4>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Tipo</th><th>Base imponible</th><th>Importe</th></tr></thead>
+                <tbody id="vat-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="result-section">
+          <h3>Verificación</h3>
+          <dl id="verification-details" class="details-grid"></dl>
+        </div>
+
+        <div class="result-section">
+          <h3>Productos</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>OCR</th><th>Normalizado</th><th>Importe</th><th>Categoría</th><th>Alcohol</th></tr></thead>
+              <tbody id="products-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <details class="json-details">
+          <summary>Ver respuesta JSON</summary>
+          <pre id="json-response"></pre>
+        </details>
+      </section>
+    </section>
+  </main>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
