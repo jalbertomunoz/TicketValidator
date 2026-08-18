@@ -35,13 +35,13 @@ internal static class ExpenseCoherenceMapper
                 throw new InvalidOperationException("OpenAI returned duplicate incompatible product indexes.");
             }
 
-            var ocrText = ticket.Products[index].OcrText;
-            if (string.IsNullOrWhiteSpace(ocrText))
+            var concept = ticket.Products[index].Concept;
+            if (string.IsNullOrWhiteSpace(concept))
             {
-                throw new InvalidOperationException("OpenAI marked a product without OCR evidence as incompatible.");
+                throw new InvalidOperationException("OpenAI marked a product without concept evidence as incompatible.");
             }
 
-            concepts.Add(ocrText);
+            concepts.Add(concept);
         }
 
         return new ExpenseCoherenceResult

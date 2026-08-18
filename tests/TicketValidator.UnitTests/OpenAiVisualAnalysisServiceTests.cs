@@ -1,5 +1,6 @@
 using TicketValidator.Infrastructure.AI;
 using TicketValidator.Infrastructure.AI.Contracts;
+using TicketValidator.Infrastructure.AI.Prompts;
 using TicketValidator.Domain.Enums;
 
 namespace TicketValidator.UnitTests;
@@ -111,6 +112,67 @@ public sealed class OpenAiVisualAnalysisServiceTests
         });
 
         Assert.Null(result.Details);
+    }
+
+    [Fact]
+    public void Map_MapsVisualSemanticTicketData()
+    {
+        var result = VisualAnalysisMapper.Map(new VisualAnalysisResponse
+        {
+            DocumentType = "FACTURA",
+            EstablishmentName = "Proveedor Ejemplo",
+            EstablishmentType = "RESTAURANT",
+            Address = new VisualAddressResponse
+            {
+                Street = "Calle Mayor 1",
+                City = "Madrid",
+                PostalCode = "28001",
+                Country = "ES"
+            },
+            TaxId = "B12345678",
+            InvoiceNumber = "F-2026-1",
+            Time = "14:30",
+            Products =
+            [
+                new VisualProductResponse
+                {
+                    Concept = "MENU DEL DIA",
+                    NormalizedText = "Menu del dia",
+                    Amount = 12.50m
+                }
+            ],
+            VatDetails = [new VisualVatResponse { Rate = 10m, TaxableAmount = 11.36m, Amount = 1.14m }],
+            ManipulationDetected = false
+        });
+
+        Assert.Equal("Proveedor Ejemplo", result.EstablishmentName);
+        Assert.Equal(EstablishmentType.Restaurant, result.EstablishmentType);
+        Assert.Equal("Calle Mayor 1", result.Address!.Street);
+        Assert.Equal("B12345678", result.TaxId);
+        Assert.Equal("F-2026-1", result.InvoiceNumber);
+        Assert.Equal("14:30", result.Time);
+        Assert.Equal("MENU DEL DIA", Assert.Single(result.Products).Concept);
+        Assert.Equal(10m, Assert.Single(result.VatDetails).Rate);
+    }
+
+    [Fact]
+    public void Map_PreservesNullEstablishmentType()
+    {
+        var result = VisualAnalysisMapper.Map(new VisualAnalysisResponse
+        {
+            DocumentType = "TICKET",
+            EstablishmentType = null,
+            ManipulationDetected = false
+        });
+
+        Assert.Null(result.EstablishmentType);
+    }
+
+    [Fact]
+    public void VisualAnalysisPrompt_RequiresIssuerDataAndExcludesCustomerData()
+    {
+        Assert.Contains("emisor", VisualAnalysisPrompt.SystemMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("nunca al cliente", VisualAnalysisPrompt.SystemMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     private static byte[] CreatePng()

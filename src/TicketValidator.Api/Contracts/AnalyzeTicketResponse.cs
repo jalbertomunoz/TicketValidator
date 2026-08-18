@@ -42,7 +42,7 @@ public sealed class TicketResponse
 
 public sealed class ProductResponse
 {
-    public string? OcrText { get; init; }
+    public string? Concept { get; init; }
 
     public string? NormalizedText { get; init; }
 

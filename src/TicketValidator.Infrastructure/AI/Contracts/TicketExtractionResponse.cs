@@ -84,7 +84,7 @@ internal static class TicketExtractionMapper
                 }).ToArray(),
                 Products = response.Products.Select(product => new ProductData
                 {
-                    OcrText = product.OcrText,
+                    Concept = product.OcrText,
                     NormalizedText = product.NormalizedText,
                     Amount = product.Amount,
                     Category = null,

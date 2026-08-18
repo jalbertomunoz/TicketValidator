@@ -8,9 +8,9 @@ internal static class ProductClassificationPrompt
     internal const string SystemMessage = """
         Eres un clasificador semantico de lineas de producto ya extraidas de un ticket.
 
-        Tu unica responsabilidad es clasificar cada producto por su denominacion OCR completa. No extraigas empresa, fecha, total ni otros datos. No decidas si un ticket es valido, no apliques reglas de negocio y no analices manipulacion.
+        Tu unica responsabilidad es clasificar cada producto por su denominacion completa. No extraigas empresa, fecha, total ni otros datos. No decidas si un ticket es valido, no apliques reglas de negocio y no analices manipulacion.
 
-        Devuelve exactamente una clasificacion por cada indice recibido. No devuelvas ni reformules el texto OCR.
+        Devuelve exactamente una clasificacion por cada indice recibido. No devuelvas ni reformules el concepto.
 
         category solo puede ser: food, nonAlcoholicBeverage, alcoholicBeverage, other o unknown. Usa unknown cuando no exista certeza suficiente.
         isAlcohol es true solo si el concepto completo identifica con suficiente certeza una bebida alcoholica; false si identifica con suficiente certeza un producto no alcoholico; null ante duda.
@@ -24,10 +24,10 @@ internal static class ProductClassificationPrompt
 
         for (var index = 0; index < products.Count; index++)
         {
-            var ocrText = products[index].OcrText;
-            if (!string.IsNullOrWhiteSpace(ocrText))
+            var concept = products[index].Concept;
+            if (!string.IsNullOrWhiteSpace(concept))
             {
-                message.Append(index).Append(": ").AppendLine(ocrText);
+                message.Append(index).Append(": ").AppendLine(concept);
             }
         }
 

@@ -57,18 +57,25 @@ fuera de la suite normal.
 ## Política de lectura
 
 Tras pruebas experimentales del MVP con tickets reales, la IA visual es la
-fuente principal para leer fecha y total directamente de la imagen. OCR se
-conserva como evidencia textual independiente para contrastar esos campos, y la
-IA sobre OCR mantiene la extracción estructurada auxiliar. El código toma siempre
-la decisión final.
+fuente principal para leer directamente de la imagen los datos del emisor,
+líneas facturadas, fecha y total. OCR se conserva exclusivamente como evidencia
+textual independiente para contrastar fecha y total, determinar legibilidad y
+facilitar diagnóstico. El código toma siempre la decisión final.
 
-Con OCR parcial, la ausencia de fecha o total OCR no impide usar y aprobar los
-campos visuales. Con OCR nulo, una lectura visual suficiente conserva esos
-valores pero devuelve `REVIEW_REQUIRED / OCR_LOW_CONFIDENCE`, ya que no hay
-contraste independiente. Sin OCR ni evidencia visual suficiente se devuelve
-`UNREADABLE / ERR_NO_LEGIBLE`. Si ambos valores difieren, el resultado es
-revisión; si solo existe OCR para un campo crítico, también se solicita revisión
-conservadora.
+Los valores visuales se conservan siempre que existan, pero `APPROVED` requiere
+que fecha y total coincidan entre OCR e IA visual (`DateMatch` y `TotalMatch`
+iguales a `true`). Un campo sin corroboración, tanto con OCR parcial como nulo,
+devuelve `REVIEW_REQUIRED / OCR_LOW_CONFIDENCE`. Sin OCR ni evidencia visual
+suficiente se devuelve `UNREADABLE / ERR_NO_LEGIBLE`.
+
+Además, `Meals`, `Diet`, `Breakfast`, `Lunch`, `Dinner` y `Material` requieren
+un CIF/NIF (`TaxId`) para aprobar. Si falta, el resultado es
+`REVIEW_REQUIRED / ERR_SIN_CIF`.
+
+Como regla preventiva adicional, una fecha corroborada futura produce
+`REVIEW_REQUIRED / ERR_FECHA_FUTURA`; una fecha corroborada de un año anterior,
+`REVIEW_REQUIRED / ERR_FECHA_ANTIGUA`. Las fechas del año actual no se consideran
+antiguas por esta regla y ningún caso se rechaza automáticamente.
 
 ## Docker
 

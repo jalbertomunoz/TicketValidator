@@ -83,6 +83,9 @@ public sealed class TicketsControllerTests
     [InlineData(AnalysisStatus.Approved, ReasonCode.Ok, "APPROVED", "OK")]
     [InlineData(AnalysisStatus.Rejected, ReasonCode.ErrBebidaAlcoholica, "REJECTED", "ERR_BEBIDA_ALCOHOLICA")]
     [InlineData(AnalysisStatus.ReviewRequired, ReasonCode.DateMismatch, "REVIEW_REQUIRED", "DATE_MISMATCH")]
+    [InlineData(AnalysisStatus.ReviewRequired, ReasonCode.ErrSinCif, "REVIEW_REQUIRED", "ERR_SIN_CIF")]
+    [InlineData(AnalysisStatus.ReviewRequired, ReasonCode.ErrFechaAntigua, "REVIEW_REQUIRED", "ERR_FECHA_ANTIGUA")]
+    [InlineData(AnalysisStatus.ReviewRequired, ReasonCode.ErrFechaFutura, "REVIEW_REQUIRED", "ERR_FECHA_FUTURA")]
     [InlineData(AnalysisStatus.Unreadable, ReasonCode.ErrNoLegible, "UNREADABLE", "ERR_NO_LEGIBLE")]
     public async Task AnalyzeAsync_ReturnsOk_ForFunctionalDecisions(
         AnalysisStatus status,
@@ -217,7 +220,6 @@ public sealed class TicketsControllerTests
         new AnalyzeTicketHandler(
             new OrientationStub(),
             new OcrStub(),
-            new TicketExtractorStub(),
             new ProductClassifierStub(),
             new ExpenseCoherenceAnalyzerStub(),
             new VisualAnalysisStub(),
@@ -247,12 +249,6 @@ public sealed class TicketsControllerTests
             Task.FromResult(new OcrResult { RawText = "evidence" });
     }
 
-    private sealed class TicketExtractorStub : IAiTicketExtractor
-    {
-        public Task<AiTicketExtraction> ExtractAsync(string ocrText, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AiTicketExtraction { Ticket = new TicketData() });
-    }
-
     private sealed class ProductClassifierStub : IProductClassifier
     {
         public Task<IReadOnlyList<ProductData>> ClassifyAsync(
@@ -278,7 +274,6 @@ public sealed class TicketsControllerTests
     {
         public VerificationResult Verify(
             OcrResult ocrResult,
-            AiTicketExtraction aiExtraction,
             VisualAnalysisResult visualAnalysis) => new();
     }
 

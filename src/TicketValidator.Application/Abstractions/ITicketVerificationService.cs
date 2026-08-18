@@ -6,6 +6,5 @@ public interface ITicketVerificationService
 {
     VerificationResult Verify(
         OcrResult ocrResult,
-        AiTicketExtraction aiExtraction,
         VisualAnalysisResult visualAnalysis);
 }

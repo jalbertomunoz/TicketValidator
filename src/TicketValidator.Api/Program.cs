@@ -31,6 +31,7 @@ builder.Services.PostConfigure<OpenAiOptions>(options =>
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection("Uploads"));
 builder.Services.Configure<AuditLogOptions>(builder.Configuration.GetSection("AuditLog"));
 builder.Services.AddInfrastructure();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddTransient<ITicketVerificationService, TicketVerificationService>();
 builder.Services.AddTransient<IExpenseRuleEngine, ExpenseRuleEngine>();
 builder.Services.AddTransient<AnalyzeTicketHandler>();

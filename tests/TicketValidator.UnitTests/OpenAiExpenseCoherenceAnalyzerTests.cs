@@ -110,7 +110,7 @@ public sealed class OpenAiExpenseCoherenceAnalyzerTests
     {
         var ticket = new TicketData
         {
-            Products = [new ProductData { OcrText = concept }]
+            Products = [new ProductData { Concept = concept }]
         };
 
         var message = ExpenseCoherencePrompt.CreateUserMessage(ticket, expenseType);
@@ -138,7 +138,7 @@ public sealed class OpenAiExpenseCoherenceAnalyzerTests
         var ticket = new TicketData
         {
             EstablishmentType = establishmentType,
-            Products = concepts.Select(concept => new ProductData { OcrText = concept }).ToArray()
+            Products = concepts.Select(concept => new ProductData { Concept = concept }).ToArray()
         };
 
         Assert.Contains($"ExpenseType: {expenseType}", ExpenseCoherencePrompt.CreateUserMessage(ticket, expenseType));

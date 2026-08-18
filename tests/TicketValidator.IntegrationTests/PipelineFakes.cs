@@ -10,15 +10,12 @@ public sealed class PipelineScenario
 {
     public OcrResult OcrResult { get; init; } = new();
 
-    public TicketData Ticket { get; init; } = new();
-
     public VisualAnalysisResult VisualAnalysis { get; init; } = new();
 
     public ExpenseCoherenceResult Coherence { get; init; } = new();
 
     public Exception? OcrException { get; init; }
 
-    public Exception? ExtractionException { get; init; }
 }
 
 internal static class PipelineScenarios
@@ -28,30 +25,22 @@ internal static class PipelineScenarios
         RawText = "MENU DEL DIA\nAGUA\nFECHA 16/08/2026\nTOTAL 12,50"
     };
 
-    private static readonly VisualAnalysisResult MatchingVisual = new()
-    {
-        VisualDocumentType = DocumentType.Receipt,
-        VisualDate = new DateOnly(2026, 8, 16),
-        VisualTotal = 12.50m,
-        ManipulationDetected = false
-    };
-
     public static PipelineScenario Approved() => Valid(
-        [
-            new ProductData { OcrText = "MENU DEL DIA", NormalizedText = "MENU DEL DIA" },
-            new ProductData { OcrText = "AGUA", NormalizedText = "AGUA" }
-        ]);
+    [
+        new ProductData { Concept = "MENU DEL DIA", NormalizedText = "MENU DEL DIA" },
+        new ProductData { Concept = "AGUA", NormalizedText = "AGUA" }
+    ]);
 
     public static PipelineScenario Alcohol() => Valid(
-        [new ProductData { OcrText = "CERVEZA MAHOU", NormalizedText = "CERVEZA MAHOU", IsAlcohol = true }]);
+        [new ProductData { Concept = "CERVEZA MAHOU", NormalizedText = "CERVEZA MAHOU", IsAlcohol = true }]);
 
     public static PipelineScenario DateMismatch() => new()
     {
         OcrResult = ValidOcr,
-        Ticket = ValidTicket([]),
         VisualAnalysis = new VisualAnalysisResult
         {
             VisualDocumentType = DocumentType.Receipt,
+            TaxId = "B12345678",
             VisualDate = new DateOnly(2026, 8, 17),
             VisualTotal = 12.50m,
             ManipulationDetected = false
@@ -61,34 +50,30 @@ internal static class PipelineScenarios
     public static PipelineScenario Unreadable() => new()
     {
         OcrResult = new OcrResult(),
-        Ticket = new TicketData { DocumentType = DocumentType.Unknown },
         VisualAnalysis = new VisualAnalysisResult { VisualDocumentType = DocumentType.Unknown }
     };
 
     public static PipelineScenario NotDocument() => new()
     {
         OcrResult = new OcrResult { RawText = "imagen sin datos de ticket" },
-        Ticket = new TicketData { DocumentType = DocumentType.Unknown },
         VisualAnalysis = new VisualAnalysisResult { VisualDocumentType = DocumentType.NotDocument }
     };
 
     public static PipelineScenario DocumentTypeMismatch() => new()
     {
         OcrResult = ValidOcr,
-        Ticket = ValidTicket([]),
         VisualAnalysis = new VisualAnalysisResult { VisualDocumentType = DocumentType.NotDocument }
     };
 
     public static PipelineScenario IncoherentExpense() => new()
     {
         OcrResult = ValidOcr,
-        Ticket = ValidTicket(
+        VisualAnalysis = CreateVisualTicket(
         [
-            new ProductData { OcrText = "DETERGENTE" },
-            new ProductData { OcrText = "LEJIA" },
-            new ProductData { OcrText = "PAPEL HIGIENICO" }
+            new ProductData { Concept = "DETERGENTE" },
+            new ProductData { Concept = "LEJIA" },
+            new ProductData { Concept = "PAPEL HIGIENICO" }
         ]),
-        VisualAnalysis = MatchingVisual,
         Coherence = new ExpenseCoherenceResult
         {
             IsCoherent = false,
@@ -101,24 +86,19 @@ internal static class PipelineScenarios
         OcrException = new InvalidOperationException("Fallo OCR controlado.")
     };
 
-    public static PipelineScenario ExtractionFailure() => new()
-    {
-        OcrResult = ValidOcr,
-        ExtractionException = new InvalidOperationException("Fallo de extracción controlado.")
-    };
-
     private static PipelineScenario Valid(IReadOnlyList<ProductData> products) => new()
     {
         OcrResult = ValidOcr,
-        Ticket = ValidTicket(products),
-        VisualAnalysis = MatchingVisual
+        VisualAnalysis = CreateVisualTicket(products)
     };
 
-    private static TicketData ValidTicket(IReadOnlyList<ProductData> products) => new()
+    private static VisualAnalysisResult CreateVisualTicket(IReadOnlyList<ProductData> products) => new()
     {
-        DocumentType = DocumentType.Receipt,
-        Date = new DateOnly(2026, 8, 16),
-        Total = 12.50m,
+        VisualDocumentType = DocumentType.Receipt,
+        TaxId = "B12345678",
+        VisualDate = new DateOnly(2026, 8, 16),
+        VisualTotal = 12.50m,
+        ManipulationDetected = false,
         Products = products
     };
 }
@@ -134,14 +114,6 @@ internal sealed class ScenarioOcrService(PipelineScenario scenario) : IOcrServic
         scenario.OcrException is null
             ? Task.FromResult(scenario.OcrResult)
             : Task.FromException<OcrResult>(scenario.OcrException);
-}
-
-internal sealed class ScenarioTicketExtractor(PipelineScenario scenario) : IAiTicketExtractor
-{
-    public Task<AiTicketExtraction> ExtractAsync(string ocrText, CancellationToken cancellationToken = default) =>
-        scenario.ExtractionException is null
-            ? Task.FromResult(new AiTicketExtraction { Ticket = scenario.Ticket })
-            : Task.FromException<AiTicketExtraction>(scenario.ExtractionException);
 }
 
 internal sealed class ScenarioProductClassifier : IProductClassifier

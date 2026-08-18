@@ -196,7 +196,7 @@ function renderProducts(products) {
 
   products.forEach((product) => {
     const row = document.createElement('tr');
-    [product.ocrText, product.normalizedText, product.amount, product.category, booleanValue(product.isAlcohol)]
+    [product.concept, product.normalizedText, product.amount, product.category, booleanValue(product.isAlcohol)]
       .forEach((item) => {
         const cell = document.createElement('td');
         cell.textContent = value(item);

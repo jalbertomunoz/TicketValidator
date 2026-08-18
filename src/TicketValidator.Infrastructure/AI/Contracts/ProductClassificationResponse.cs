@@ -28,8 +28,8 @@ internal static class ProductClassificationMapper
         ArgumentNullException.ThrowIfNull(response);
 
         var expectedIndices = products
-            .Select((product, index) => new { product.OcrText, Index = index })
-            .Where(product => !string.IsNullOrWhiteSpace(product.OcrText))
+            .Select((product, index) => new { product.Concept, Index = index })
+            .Where(product => !string.IsNullOrWhiteSpace(product.Concept))
             .Select(product => product.Index)
             .ToHashSet();
         var classifications = response.Classifications
@@ -61,7 +61,7 @@ internal static class ProductClassificationMapper
 
         return products.Select((product, index) =>
         {
-            if (string.IsNullOrWhiteSpace(product.OcrText))
+            if (string.IsNullOrWhiteSpace(product.Concept))
             {
                 return CreateProduct(product, ProductCategory.Unknown, null);
             }
@@ -73,7 +73,7 @@ internal static class ProductClassificationMapper
 
     private static ProductData CreateProduct(ProductData product, ProductCategory category, bool? isAlcohol) => new()
     {
-        OcrText = product.OcrText,
+            Concept = product.Concept,
         NormalizedText = product.NormalizedText,
         Amount = product.Amount,
         Category = category,

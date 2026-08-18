@@ -8,7 +8,8 @@ namespace TicketValidator.UnitTests;
 
 public sealed class ExpenseRuleEngineTests
 {
-    private readonly ExpenseRuleEngine _engine = new();
+    private readonly ExpenseRuleEngine _engine = new(new FixedTimeProvider(
+        new DateTimeOffset(2026, 8, 18, 0, 0, 0, TimeSpan.Zero)));
 
     [Fact]
     public void Evaluate_ReturnsUnreadable_WhenOcrIsNotReadable()
@@ -87,7 +88,7 @@ public sealed class ExpenseRuleEngineTests
     public void Evaluate_DoesNotRejectRecognizedDocumentTypesAsNotDocument(DocumentType visualDocumentType)
     {
         var decision = Evaluate(
-            new TicketData { DocumentType = visualDocumentType },
+            new TicketData { DocumentType = visualDocumentType, TaxId = "B12345678" },
             ValidVerification(visualDocumentType: visualDocumentType));
 
         Assert.Equal(AnalysisStatus.Approved, decision.Status);
@@ -107,7 +108,7 @@ public sealed class ExpenseRuleEngineTests
     public void Evaluate_RejectsAlcoholProductWithOcrEvidence()
     {
         var decision = Evaluate(ticket: ValidTicket(
-            new ProductData { OcrText = "CERVEZA MAHOU", IsAlcohol = true }));
+            new ProductData { Concept = "CERVEZA MAHOU", IsAlcohol = true }));
 
         Assert.Equal(AnalysisStatus.Rejected, decision.Status);
         Assert.Equal(ReasonCode.ErrBebidaAlcoholica, decision.ReasonCode);
@@ -118,7 +119,7 @@ public sealed class ExpenseRuleEngineTests
     public void Evaluate_DoesNotRejectCerezasAsAlcohol()
     {
         var decision = Evaluate(ticket: ValidTicket(
-            new ProductData { OcrText = "CEREZAS", IsAlcohol = false }));
+            new ProductData { Concept = "CEREZAS", IsAlcohol = false }));
 
         Assert.Equal(AnalysisStatus.Approved, decision.Status);
         Assert.Equal(ReasonCode.Ok, decision.ReasonCode);
@@ -191,28 +192,132 @@ public sealed class ExpenseRuleEngineTests
     public void Evaluate_PrioritizesAlcoholOverDateMismatch()
     {
         var decision = Evaluate(
-            ValidTicket(new ProductData { OcrText = "CERVEZA MAHOU", IsAlcohol = true }),
+            ValidTicket(new ProductData { Concept = "CERVEZA MAHOU", IsAlcohol = true }),
             ValidVerification(dateMatch: false));
 
         Assert.Equal(ReasonCode.ErrBebidaAlcoholica, decision.ReasonCode);
     }
 
-    [Fact]
-    public void Evaluate_ApprovesWhenVisualTotalExistsAndOcrTotalIsMissing()
+    [Theory]
+    [InlineData(2026, 8, 18)]
+    [InlineData(2026, 8, 17)]
+    [InlineData(2026, 1, 1)]
+    public void Evaluate_DoesNotRequireTemporalReviewForCorroboratedDatesInCurrentYear(
+        int year,
+        int month,
+        int day)
     {
-        var decision = Evaluate(verification: ValidVerification(ocrTotal: null));
+        var decision = Evaluate(verification: ValidVerification(date: new DateOnly(year, month, day)));
 
         Assert.Equal(AnalysisStatus.Approved, decision.Status);
         Assert.Equal(ReasonCode.Ok, decision.ReasonCode);
     }
 
-    [Fact]
-    public void Evaluate_ApprovesWhenVisualDateExistsAndOcrDateIsMissing()
+    [Theory]
+    [InlineData(2025, 12, 31)]
+    [InlineData(2024, 2, 10)]
+    public void Evaluate_RequiresReviewForCorroboratedDateFromPreviousYear(int year, int month, int day)
     {
-        var decision = Evaluate(verification: ValidVerification(includeOcrDate: false));
+        var decision = Evaluate(verification: ValidVerification(date: new DateOnly(year, month, day)));
 
-        Assert.Equal(AnalysisStatus.Approved, decision.Status);
-        Assert.Equal(ReasonCode.Ok, decision.ReasonCode);
+        Assert.Equal(AnalysisStatus.ReviewRequired, decision.Status);
+        Assert.Equal(ReasonCode.ErrFechaAntigua, decision.ReasonCode);
+    }
+
+    [Theory]
+    [InlineData(2026, 8, 19)]
+    [InlineData(2027, 1, 1)]
+    public void Evaluate_RequiresReviewForCorroboratedFutureDate(int year, int month, int day)
+    {
+        var decision = Evaluate(verification: ValidVerification(date: new DateOnly(year, month, day)));
+
+        Assert.Equal(AnalysisStatus.ReviewRequired, decision.Status);
+        Assert.Equal(ReasonCode.ErrFechaFutura, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_PrioritizesDateMismatchOverTemporalDateRules()
+    {
+        var decision = Evaluate(verification: ValidVerification(
+            date: new DateOnly(2025, 8, 18),
+            dateMatch: false));
+
+        Assert.Equal(ReasonCode.DateMismatch, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_PrioritizesOcrLowConfidenceOverTemporalDateRules()
+    {
+        var decision = Evaluate(verification: ValidVerification(
+            date: new DateOnly(2025, 8, 18),
+            dateMatch: null,
+            includeOcrDate: false));
+
+        Assert.Equal(ReasonCode.OcrLowConfidence, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_PrioritizesManipulationOverTemporalDateRules()
+    {
+        var decision = Evaluate(verification: ValidVerification(
+            date: new DateOnly(2025, 8, 18),
+            manipulationDetected: true));
+
+        Assert.Equal(ReasonCode.ErrDocumentoManipulado, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_PrioritizesAlcoholOverTemporalDateRules()
+    {
+        var decision = Evaluate(
+            ValidTicket(new ProductData { Concept = "CERVEZA MAHOU", IsAlcohol = true }),
+            ValidVerification(date: new DateOnly(2026, 8, 19)));
+
+        Assert.Equal(ReasonCode.ErrBebidaAlcoholica, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_PrioritizesIncoherenceOverTemporalDateRules()
+    {
+        var decision = Evaluate(
+            verification: ValidVerification(date: new DateOnly(2025, 8, 18)),
+            coherence: new ExpenseCoherenceResult { IsCoherent = false });
+
+        Assert.Equal(ReasonCode.ErrTipoGastoIncoherente, decision.ReasonCode);
+    }
+
+    [Theory]
+    [InlineData(2025, 8, 18, ReasonCode.ErrFechaAntigua)]
+    [InlineData(2026, 8, 19, ReasonCode.ErrFechaFutura)]
+    public void Evaluate_PrioritizesTemporalDateRulesOverMissingTaxId(
+        int year,
+        int month,
+        int day,
+        ReasonCode expectedReasonCode)
+    {
+        var decision = Evaluate(
+            ticket: TicketWithTaxId(null),
+            verification: ValidVerification(date: new DateOnly(year, month, day)));
+
+        Assert.Equal(expectedReasonCode, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_RequiresReviewWhenVisualTotalExistsAndOcrTotalIsMissing()
+    {
+        var decision = Evaluate(verification: ValidVerification(ocrTotal: null, totalMatch: null));
+
+        Assert.Equal(AnalysisStatus.ReviewRequired, decision.Status);
+        Assert.Equal(ReasonCode.OcrLowConfidence, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_RequiresReviewWhenVisualDateExistsAndOcrDateIsMissing()
+    {
+        var decision = Evaluate(verification: ValidVerification(includeOcrDate: false, dateMatch: null));
+
+        Assert.Equal(AnalysisStatus.ReviewRequired, decision.Status);
+        Assert.Equal(ReasonCode.OcrLowConfidence, decision.ReasonCode);
     }
 
     [Fact]
@@ -240,7 +345,7 @@ public sealed class ExpenseRuleEngineTests
     [Fact]
     public void Evaluate_RequiresReviewWhenOnlyOcrProvidesCriticalField()
     {
-        var decision = Evaluate(verification: ValidVerification(includeVisualDate: false));
+        var decision = Evaluate(verification: ValidVerification(includeVisualDate: false, dateMatch: null));
 
         Assert.Equal(AnalysisStatus.ReviewRequired, decision.Status);
         Assert.Equal(ReasonCode.OcrLowConfidence, decision.ReasonCode);
@@ -262,7 +367,7 @@ public sealed class ExpenseRuleEngineTests
     }
 
     [Fact]
-    public void Evaluate_ApprovesWhenOcrIsPartialAndVisualProvidesCriticalFields()
+    public void Evaluate_RequiresReviewWhenOcrIsPartialAndVisualProvidesCriticalFields()
     {
         var decision = Evaluate(verification: ValidVerification(
             dateMatch: null,
@@ -271,8 +376,8 @@ public sealed class ExpenseRuleEngineTests
             includeOcrDate: false,
             visualDocumentType: DocumentType.Receipt));
 
-        Assert.Equal(AnalysisStatus.Approved, decision.Status);
-        Assert.Equal(ReasonCode.Ok, decision.ReasonCode);
+        Assert.Equal(AnalysisStatus.ReviewRequired, decision.Status);
+        Assert.Equal(ReasonCode.OcrLowConfidence, decision.ReasonCode);
     }
 
     [Fact]
@@ -293,7 +398,7 @@ public sealed class ExpenseRuleEngineTests
     public void Evaluate_PrioritizesAlcoholOverOcrLowConfidence()
     {
         var decision = Evaluate(
-            ValidTicket(new ProductData { OcrText = "CERVEZA MAHOU", IsAlcohol = true }),
+            ValidTicket(new ProductData { Concept = "CERVEZA MAHOU", IsAlcohol = true }),
             ValidVerification(
                 ocrReadable: false,
                 ocrTotal: null,
@@ -302,6 +407,92 @@ public sealed class ExpenseRuleEngineTests
 
         Assert.Equal(AnalysisStatus.Rejected, decision.Status);
         Assert.Equal(ReasonCode.ErrBebidaAlcoholica, decision.ReasonCode);
+    }
+
+    [Theory]
+    [InlineData(ExpenseType.Meals)]
+    [InlineData(ExpenseType.Diet)]
+    [InlineData(ExpenseType.Breakfast)]
+    [InlineData(ExpenseType.Lunch)]
+    [InlineData(ExpenseType.Dinner)]
+    [InlineData(ExpenseType.Material)]
+    public void Evaluate_RequiresTaxIdForApplicableExpenseTypes(ExpenseType expenseType)
+    {
+        var decision = Evaluate(ticket: TicketWithTaxId(null), expenseType: expenseType);
+
+        Assert.Equal(AnalysisStatus.ReviewRequired, decision.Status);
+        Assert.Equal(ReasonCode.ErrSinCif, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_ApprovesLunchWhenCriticalFieldsMatchAndTaxIdExists()
+    {
+        var decision = Evaluate(expenseType: ExpenseType.Lunch);
+
+        Assert.Equal(AnalysisStatus.Approved, decision.Status);
+        Assert.Equal(ReasonCode.Ok, decision.ReasonCode);
+    }
+
+    [Theory]
+    [InlineData(ExpenseType.Parking)]
+    [InlineData(ExpenseType.Highway)]
+    [InlineData(ExpenseType.Taxi)]
+    [InlineData(ExpenseType.Fuel)]
+    [InlineData(ExpenseType.Accommodation)]
+    [InlineData(ExpenseType.Other)]
+    [InlineData(ExpenseType.Unknown)]
+    public void Evaluate_DoesNotRequireTaxIdForOtherExpenseTypes(ExpenseType expenseType)
+    {
+        var decision = Evaluate(ticket: TicketWithTaxId(null), expenseType: expenseType);
+
+        Assert.Equal(AnalysisStatus.Approved, decision.Status);
+        Assert.Equal(ReasonCode.Ok, decision.ReasonCode);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Evaluate_RequiresTaxIdWhenTheValueIsBlank(string? taxId)
+    {
+        var decision = Evaluate(ticket: TicketWithTaxId(taxId));
+
+        Assert.Equal(ReasonCode.ErrSinCif, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_PrioritizesManipulationOverMissingTaxId()
+    {
+        var decision = Evaluate(
+            ticket: TicketWithTaxId(null),
+            verification: ValidVerification(manipulationDetected: true));
+
+        Assert.Equal(ReasonCode.ErrDocumentoManipulado, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_PrioritizesAlcoholOverMissingTaxId()
+    {
+        var decision = Evaluate(
+            TicketWithTaxId(null, new ProductData { Concept = "CERVEZA MAHOU", IsAlcohol = true }));
+
+        Assert.Equal(ReasonCode.ErrBebidaAlcoholica, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_PrioritizesDateMismatchOverMissingTaxId()
+    {
+        var decision = Evaluate(ticket: TicketWithTaxId(null), verification: ValidVerification(dateMatch: false));
+
+        Assert.Equal(ReasonCode.DateMismatch, decision.ReasonCode);
+    }
+
+    [Fact]
+    public void Evaluate_PrioritizesTotalMismatchOverMissingTaxId()
+    {
+        var decision = Evaluate(ticket: TicketWithTaxId(null), verification: ValidVerification(totalMatch: false));
+
+        Assert.Equal(ReasonCode.TotalMismatch, decision.ReasonCode);
     }
 
     [Fact]
@@ -317,16 +508,20 @@ public sealed class ExpenseRuleEngineTests
     private AnalysisDecision Evaluate(
         TicketData? ticket = null,
         VerificationData? verification = null,
-        ExpenseCoherenceResult? coherence = null) =>
+        ExpenseCoherenceResult? coherence = null,
+        ExpenseType expenseType = ExpenseType.Meals) =>
         _engine.Evaluate(
             ticket ?? ValidTicket(),
             verification ?? ValidVerification(),
-            ExpenseType.Meals,
+            expenseType,
             coherence ?? new ExpenseCoherenceResult { IsCoherent = true });
 
-    private static TicketData ValidTicket(params ProductData[] products) => new()
+    private static TicketData ValidTicket(params ProductData[] products) => TicketWithTaxId("B12345678", products);
+
+    private static TicketData TicketWithTaxId(string? taxId, params ProductData[] products) => new()
     {
         DocumentType = DocumentType.Receipt,
+        TaxId = taxId,
         Date = new DateOnly(2026, 8, 15),
         Total = 12.50m,
         Products = products
@@ -341,16 +536,26 @@ public sealed class ExpenseRuleEngineTests
         bool includeOcrDate = true,
         bool includeVisualDate = true,
         bool includeVisualTotal = true,
-        DocumentType? visualDocumentType = null) => new()
+        DocumentType? visualDocumentType = null,
+        DateOnly date = default)
     {
-        OcrReadable = ocrReadable,
-        VisualDocumentType = visualDocumentType,
-        DateMatch = dateMatch,
-        OcrDate = includeOcrDate ? new DateOnly(2026, 8, 15) : null,
-        VisualDate = includeVisualDate ? new DateOnly(2026, 8, 15) : null,
-        TotalMatch = totalMatch,
-        OcrTotal = ocrTotal,
-        VisualTotal = includeVisualTotal ? 12.50m : null,
-        ManipulationDetected = manipulationDetected
-    };
+        var resolvedDate = date == default ? new DateOnly(2026, 8, 15) : date;
+        return new VerificationData
+        {
+            OcrReadable = ocrReadable,
+            VisualDocumentType = visualDocumentType,
+            DateMatch = dateMatch,
+            OcrDate = includeOcrDate ? resolvedDate : null,
+            VisualDate = includeVisualDate ? resolvedDate : null,
+            TotalMatch = totalMatch,
+            OcrTotal = ocrTotal,
+            VisualTotal = includeVisualTotal ? 12.50m : null,
+            ManipulationDetected = manipulationDetected
+        };
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
+    }
 }

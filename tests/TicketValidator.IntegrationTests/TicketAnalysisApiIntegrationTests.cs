@@ -19,7 +19,7 @@ public sealed class TicketAnalysisApiIntegrationTests
         { PipelineScenarios.DateMismatch(), "REVIEW_REQUIRED", "DATE_MISMATCH" },
         { PipelineScenarios.Unreadable(), "UNREADABLE", "ERR_NO_LEGIBLE" },
         { PipelineScenarios.NotDocument(), "REJECTED", "ERR_NO_DOCUMENTO" },
-        { PipelineScenarios.DocumentTypeMismatch(), "REVIEW_REQUIRED", "DOCUMENT_TYPE_MISMATCH" },
+        { PipelineScenarios.DocumentTypeMismatch(), "REJECTED", "ERR_NO_DOCUMENTO" },
         { PipelineScenarios.IncoherentExpense(), "REJECTED", "ERR_TIPO_GASTO_INCOHERENTE" }
     };
 
@@ -73,7 +73,6 @@ public sealed class TicketAnalysisApiIntegrationTests
                 services.RemoveAll<ChatClient>();
                 services.RemoveAll<IDocumentOrientationService>();
                 services.RemoveAll<IOcrService>();
-                services.RemoveAll<IAiTicketExtractor>();
                 services.RemoveAll<IProductClassifier>();
                 services.RemoveAll<IExpenseCoherenceAnalyzer>();
                 services.RemoveAll<IVisualAnalysisService>();
@@ -82,7 +81,6 @@ public sealed class TicketAnalysisApiIntegrationTests
                 services.AddSingleton(scenario);
                 services.AddSingleton<IDocumentOrientationService, ScenarioDocumentOrientationService>();
                 services.AddSingleton<IOcrService, ScenarioOcrService>();
-                services.AddSingleton<IAiTicketExtractor, ScenarioTicketExtractor>();
                 services.AddSingleton<IProductClassifier, ScenarioProductClassifier>();
                 services.AddSingleton<IExpenseCoherenceAnalyzer, ScenarioExpenseCoherenceAnalyzer>();
                 services.AddSingleton<IVisualAnalysisService, ScenarioVisualAnalysisService>();

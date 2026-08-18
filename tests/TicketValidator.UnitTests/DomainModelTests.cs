@@ -37,11 +37,11 @@ public sealed class DomainModelTests
     {
         var product = new ProductData
         {
-            OcrText = "CEREZAS",
+            Concept = "CEREZAS",
             NormalizedText = "Cerezas"
         };
 
-        Assert.Equal("CEREZAS", product.OcrText);
+        Assert.Equal("CEREZAS", product.Concept);
         Assert.Equal("Cerezas", product.NormalizedText);
     }
 
@@ -50,7 +50,7 @@ public sealed class DomainModelTests
     {
         var products = new[]
         {
-            new ProductData { OcrText = "MENU", Amount = 18.50m }
+            new ProductData { Concept = "MENU", Amount = 18.50m }
         };
         var ticket = new TicketData
         {

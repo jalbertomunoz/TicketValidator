@@ -301,7 +301,7 @@ La configuración de confianza deberá mantenerse fuera de las reglas de negocio
 
 ```text
 OCR parcial: OcrReadable = true aunque falten fecha o total
-→ la lectura visual puede aprobarse si no hay otra regla
+→ la lectura visual se conserva, pero sin corroboración requiere REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
 
 OCR nulo: OcrReadable = false y no hay texto ni palabras
 → con ticket/factura y evidencia visual suficiente, REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
@@ -312,9 +312,9 @@ OCR nulo: OcrReadable = false y no hay texto ni palabras
 
 ## 10. Reglas sobre Inteligencia Artificial
 
-GPT-4.1 visual es la fuente principal de lectura de fecha y total directamente de
-la imagen. GPT-4.1 sobre texto OCR se utiliza para extracción, estructuración y
-clasificación auxiliar.
+GPT-4.1 visual es la fuente principal de lectura de los datos semánticos,
+productos, fecha y total directamente de la imagen. OCR se utiliza para
+contrastar fecha y total, determinar legibilidad y facilitar diagnóstico.
 
 No debe utilizarse como sustituto del OCR cuando se necesite evidencia textual.
 
@@ -340,7 +340,7 @@ TicketExtractionPrompt
 
 ProductClassificationPrompt
 
-VisualManipulationPrompt
+VisualAnalysisPrompt
 ```
 
 ---
@@ -355,7 +355,7 @@ Visual + OCR coinciden
 → dato corroborado
 
 Visual existe + OCR no existe
-→ con OCR parcial, usar valor visual; Match = null
+→ conservar valor visual; Match = null; REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
 
 Visual existe + OCR nulo
 → conservar valor visual; REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
@@ -369,6 +369,19 @@ Ambos no existen
 Solo OCR existe
 → REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
 ```
+
+Para `APPROVED`, `DateMatch` y `TotalMatch` deben ser ambos `true`.
+La lectura visual sigue siendo el valor principal, pero OCR debe corroborar ambos
+campos críticos para aprobar automáticamente.
+
+Para `Meals`, `Diet`, `Breakfast`, `Lunch`, `Dinner` y `Material`, `TaxId` es
+obligatorio para aprobar. Su ausencia produce `REVIEW_REQUIRED / ERR_SIN_CIF`
+cuando no existe una regla de mayor prioridad.
+
+Sobre una fecha corroborada (`DateMatch = true`), una fecha posterior al día
+actual produce `REVIEW_REQUIRED / ERR_FECHA_FUTURA`; una fecha de un año anterior
+produce `REVIEW_REQUIRED / ERR_FECHA_ANTIGUA`. Un documento del año actual no se
+considera antiguo por esta regla.
 
 Campos críticos iniciales:
 
@@ -384,23 +397,23 @@ Campos críticos iniciales:
 Cada producto deberá conservar, cuando sea posible:
 
 ```text
-ocrText
+concept
 normalizedText
 amount
 category
 isAlcohol
 ```
 
-`ocrText` representa la evidencia original.
+`concept` representa el texto visible de una línea real de compra.
 
 `normalizedText` es una interpretación.
 
-Nunca alterar el significado esencial del texto OCR.
+Nunca alterar el significado esencial del concepto visible.
 
 Ejemplo incorrecto:
 
 ```text
-OCR:
+Concepto:
 CEREZAS
 
 Interpretación:
@@ -520,6 +533,9 @@ ERR_SIN_FECHA
 DATE_MISMATCH
 TOTAL_MISMATCH
 OCR_LOW_CONFIDENCE
+ERR_SIN_CIF
+ERR_FECHA_ANTIGUA
+ERR_FECHA_FUTURA
 ```
 
 No crear nuevos estados o códigos sin una necesidad concreta.
@@ -567,7 +583,10 @@ La prioridad inicial de las reglas es:
 8. ERR_SIN_TOTAL, solo sin total visual ni OCR
 9. ERR_SIN_FECHA, solo sin fecha visual ni OCR
 10. OCR_LOW_CONFIDENCE, con un campo crítico exclusivo de OCR o OCR nulo con evidencia visual suficiente
-11. OK
+11. ERR_FECHA_FUTURA, solo con DateMatch = true
+12. ERR_FECHA_ANTIGUA, solo con DateMatch = true y año anterior
+13. ERR_SIN_CIF, para Meals/Diet/Breakfast/Lunch/Dinner/Material sin TaxId
+14. OK
 ```
 
 `REVIEW_REQUIRED` se utiliza para discrepancias cuando no existe una regla de mayor prioridad que determine un rechazo.
@@ -750,7 +769,7 @@ ticket girado
 → intentar rotar antes del OCR
 
 OCR parcial sin fecha o total, con ticket visual y campos visuales
-→ puede aprobarse
+→ REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
 
 OCR vacío con ticket visual y fecha y total visuales
 → REVIEW_REQUIRED / OCR_LOW_CONFIDENCE

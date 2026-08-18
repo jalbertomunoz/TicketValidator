@@ -8,6 +8,13 @@ namespace TicketValidator.Application.Services;
 
 public sealed class ExpenseRuleEngine : IExpenseRuleEngine
 {
+    private readonly TimeProvider _timeProvider;
+
+    public ExpenseRuleEngine(TimeProvider? timeProvider = null)
+    {
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
+
     public AnalysisDecision Evaluate(
         TicketData ticket,
         VerificationData verification,
@@ -51,13 +58,13 @@ public sealed class ExpenseRuleEngine : IExpenseRuleEngine
         }
 
         var alcoholProduct = ticket.Products.FirstOrDefault(product =>
-            product.IsAlcohol is true && !string.IsNullOrWhiteSpace(product.OcrText));
+            product.IsAlcohol is true && !string.IsNullOrWhiteSpace(product.Concept));
         if (alcoholProduct is not null)
         {
             return CreateDecision(
                 AnalysisStatus.Rejected,
                 ReasonCode.ErrBebidaAlcoholica,
-                $"Se ha encontrado el concepto {alcoholProduct.OcrText}.");
+                $"Se ha encontrado el concepto {alcoholProduct.Concept}.");
         }
 
         if (coherence.IsCoherent is false)
@@ -103,13 +110,12 @@ public sealed class ExpenseRuleEngine : IExpenseRuleEngine
                 "No se ha podido determinar la fecha.");
         }
 
-        if ((verification.VisualDate is null && verification.OcrDate is not null)
-            || (verification.VisualTotal is null && verification.OcrTotal is not null))
+        if (verification.DateMatch is not true || verification.TotalMatch is not true)
         {
             return CreateDecision(
                 AnalysisStatus.ReviewRequired,
                 ReasonCode.OcrLowConfidence,
-                "Al menos un campo crítico solo dispone de evidencia OCR y requiere revisión visual.");
+                "La fecha y el importe total deben estar corroborados por OCR e IA visual.");
         }
 
         if (!verification.OcrReadable)
@@ -118,6 +124,34 @@ public sealed class ExpenseRuleEngine : IExpenseRuleEngine
                 AnalysisStatus.ReviewRequired,
                 ReasonCode.OcrLowConfidence,
                 "La lectura visual no ha podido contrastarse porque OCR no ha obtenido evidencia textual.");
+        }
+
+        if (verification.DateMatch is true && verification.VisualDate is { } ticketDate)
+        {
+            var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+            if (ticketDate > today)
+            {
+                return CreateDecision(
+                    AnalysisStatus.ReviewRequired,
+                    ReasonCode.ErrFechaFutura,
+                    "La fecha del documento es posterior a la fecha actual y requiere revisión.");
+            }
+
+            if (ticketDate.Year < today.Year)
+            {
+                return CreateDecision(
+                    AnalysisStatus.ReviewRequired,
+                    ReasonCode.ErrFechaAntigua,
+                    "La fecha del documento corresponde a un año anterior al actual y requiere revisión.");
+            }
+        }
+
+        if (RequiresTaxId(expenseType) && string.IsNullOrWhiteSpace(ticket.TaxId))
+        {
+            return CreateDecision(
+                AnalysisStatus.ReviewRequired,
+                ReasonCode.ErrSinCif,
+                "No se ha podido determinar el CIF/NIF del emisor para este tipo de gasto.");
         }
 
         return CreateDecision(AnalysisStatus.Approved, ReasonCode.Ok, null);
@@ -136,4 +170,12 @@ public sealed class ExpenseRuleEngine : IExpenseRuleEngine
     private static bool HasSufficientVisualEvidence(VerificationData verification) =>
         verification.VisualDocumentType is DocumentType.Receipt or DocumentType.Invoice
         && (verification.VisualDate is not null || verification.VisualTotal is not null);
+
+    private static bool RequiresTaxId(ExpenseType expenseType) => expenseType is
+        ExpenseType.Meals
+        or ExpenseType.Diet
+        or ExpenseType.Breakfast
+        or ExpenseType.Lunch
+        or ExpenseType.Dinner
+        or ExpenseType.Material;
 }

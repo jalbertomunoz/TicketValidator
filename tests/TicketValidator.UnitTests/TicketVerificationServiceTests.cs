@@ -114,7 +114,7 @@ public sealed class TicketVerificationServiceTests
     [Fact]
     public void Verify_SetsOcrReadableFalse_WhenThereIsNoTextOrWords()
     {
-        var result = _service.Verify(new OcrResult(), new AiTicketExtraction(), new VisualAnalysisResult());
+        var result = _service.Verify(new OcrResult(), new VisualAnalysisResult());
 
         Assert.False(result.Verification.OcrReadable);
     }
@@ -124,7 +124,6 @@ public sealed class TicketVerificationServiceTests
     {
         var result = _service.Verify(
             new OcrResult { Words = [new OcrWord { Text = "EVIDENCIA" }] },
-            new AiTicketExtraction(),
             new VisualAnalysisResult());
 
         Assert.True(result.Verification.OcrReadable);
@@ -135,7 +134,6 @@ public sealed class TicketVerificationServiceTests
     {
         var result = _service.Verify(
             new OcrResult { RawText = "EVIDENCIA" },
-            new AiTicketExtraction(),
             new VisualAnalysisResult { ManipulationDetected = true });
 
         Assert.True(result.Verification.ManipulationDetected);
@@ -162,14 +160,6 @@ public sealed class TicketVerificationServiceTests
     {
         var result = _service.Verify(
             new OcrResult { RawText = "FECHA: 15/08/2026\nTOTAL: 12,50" },
-            new AiTicketExtraction
-            {
-                Ticket = new TicketData
-                {
-                    Date = new DateOnly(2026, 8, 15),
-                    Total = 12.50m
-                }
-            },
             new VisualAnalysisResult
             {
                 VisualDate = new DateOnly(2026, 8, 16),
@@ -187,7 +177,6 @@ public sealed class TicketVerificationServiceTests
         DocumentType? visualDocumentType = null) =>
         _service.Verify(
             new OcrResult { RawText = rawText },
-            new AiTicketExtraction(),
             new VisualAnalysisResult
             {
                 VisualDate = visualDate,

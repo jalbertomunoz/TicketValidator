@@ -310,10 +310,10 @@ Extracción IA        Análisis visual IA
 
 # 10. Política de evidencia
 
-La IA visual es la fuente principal de lectura de fecha y total directamente de
-la imagen. OCR conserva evidencia textual independiente para contrastar esos
-campos. La IA de extracción basada en texto OCR estructura evidencia auxiliar
-para establecimiento, CIF, número de factura, hora, dirección, IVA y productos.
+La IA visual es la fuente principal de lectura directamente de la imagen para
+emisor, CIF, número de factura, hora, dirección, IVA, productos, fecha y total.
+OCR conserva evidencia textual independiente exclusivamente para contrastar
+fecha y total, determinar legibilidad y facilitar diagnóstico.
 
 Para fecha y total:
 
@@ -322,7 +322,7 @@ Visual + OCR coinciden
 → dato corroborado
 
 Visual existe + OCR no existe
-→ con OCR parcial, se utiliza el valor visual; Match = null
+→ se conserva el valor visual; Match = null; REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
 
 Visual existe + OCR nulo
 → se conserva el valor visual; REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
@@ -339,10 +339,10 @@ Ambas fuentes no obtienen el dato
 
 `OcrReadable` solo indica que existe evidencia textual OCR. Se distingue OCR
 parcial, cuando existe texto aunque falten fecha o total, de OCR nulo, sin texto
-ni palabras. OCR parcial no impide aprobar una lectura visual suficiente. OCR
-nulo con ticket/factura y evidencia visual suficiente conserva esos valores, pero
-devuelve `REVIEW_REQUIRED / OCR_LOW_CONFIDENCE`; sin evidencia visual suficiente
-devuelve `UNREADABLE / ERR_NO_LEGIBLE`.
+ni palabras. En ambos casos, un campo crítico sin corroboración conserva el valor
+visual pero requiere `REVIEW_REQUIRED / OCR_LOW_CONFIDENCE`. OCR nulo con
+ticket/factura y evidencia visual suficiente evita `ERR_NO_LEGIBLE`; sin
+evidencia visual suficiente devuelve `UNREADABLE / ERR_NO_LEGIBLE`.
 
 ---
 
@@ -416,6 +416,9 @@ El sistema utilizará:
 ```
 
 como lectura principal sin marcarla como corroborada por OCR.
+
+El resultado es `REVIEW_REQUIRED / OCR_LOW_CONFIDENCE`: para aprobar, fecha y
+total deben estar corroborados por ambas fuentes.
 
 ---
 
@@ -563,7 +566,6 @@ UNKNOWN
 ```
 
 `NO_DOCUMENTO` requiere evidencia positiva de que la imagen no es un ticket ni factura. `UNKNOWN` representa evidencia insuficiente y no podrá convertirse automáticamente en `NO_DOCUMENTO`.
-Si la visión indica `NO_DOCUMENTO` pero el tipo estructurado desde OCR es ticket o factura, el resultado será revisión humana mediante `DocumentTypeMismatch`, no rechazo automático.
 
 ---
 
@@ -576,6 +578,18 @@ El sistema deberá intentar extraer el nombre del establecimiento o empresa.
 ## RF-013 — CIF
 
 El sistema deberá intentar extraer el identificador fiscal cuando exista.
+
+---
+
+## RF-013a — CIF obligatorio condicionado
+
+Para `Meals`, `Diet`, `Breakfast`, `Lunch`, `Dinner` y `Material`, un `TaxId`
+vacío, nulo o compuesto solo por espacios producirá:
+
+```text
+REVIEW_REQUIRED
+ERR_SIN_CIF
+```
 
 ---
 
@@ -645,9 +659,10 @@ El sistema deberá intentar extraer las líneas correspondientes a:
 
 ---
 
-## RF-021 — Texto OCR de producto
+## RF-021 — Concepto de producto
 
-Cada producto deberá conservar el texto OCR original cuando sea posible.
+Cada producto deberá conservar el concepto visible de la línea facturada cuando
+sea posible, sin reinterpretarlo semánticamente.
 
 ---
 
@@ -813,9 +828,20 @@ El sistema no deberá completar dígitos de una fecha que no puedan leerse con s
 
 ---
 
+## RF-038a — Fecha temporalmente sospechosa
+
+Solo cuando `DateMatch = true`, una fecha posterior a la fecha UTC actual deberá
+producir `REVIEW_REQUIRED / ERR_FECHA_FUTURA`. Una fecha cuyo año sea anterior al
+año UTC actual deberá producir `REVIEW_REQUIRED / ERR_FECHA_ANTIGUA`. Una fecha
+del mismo año no se considera antigua por esta regla.
+
+---
+
 ## RF-039 — Análisis visual
 
-El sistema deberá utilizar análisis visual para clasificar explícitamente ticket, factura, no documento o desconocido, detectar indicios visibles de manipulación y realizar la lectura principal de fecha y total directamente desde la imagen.
+El sistema deberá utilizar análisis visual para clasificar explícitamente ticket,
+factura, no documento o desconocido, detectar indicios visibles de manipulación y
+realizar la lectura principal de los datos semánticos directamente desde la imagen.
 
 ---
 
@@ -936,15 +962,17 @@ La IA no seleccionará directamente el estado final.
 
 ## RN-002 — IA visual como lectura principal
 
-La IA visual prevalece para fecha y total cuando obtiene valores directamente de
-la imagen.
+La IA visual proporciona los datos semánticos y productos del ticket cuando los
+lee directamente de la imagen. Fecha y total son los únicos campos contrastados
+con OCR para la decisión automática.
 
 ---
 
 ## RN-003 — OCR como contraste independiente
 
-OCR conserva evidencia textual para contrastar fecha y total, y la extracción
-basada en OCR estructura los demás campos auxiliares.
+OCR conserva evidencia textual para contrastar fecha y total, determinar
+legibilidad y facilitar diagnóstico; no completa datos semánticos ausentes en la
+lectura visual.
 
 ---
 
@@ -968,9 +996,25 @@ cuando no exista una regla de mayor prioridad.
 
 ---
 
+## RN-005a — Corroboración para aprobación
+
+`APPROVED / OK` requiere `DateMatch = true` y `TotalMatch = true`. La IA visual
+sigue siendo la lectura principal de ambos valores, pero OCR debe corroborarlos
+para aprobar automáticamente.
+
+---
+
 ## RN-006 — Fecha
 
 La fecha no podrá reconstruirse mediante inferencias.
+
+---
+
+## RN-006a — Revisión temporal preventiva
+
+La fecha corroborada se compara por día, usando `TimeProvider` y fecha UTC. La
+regla de futuro se evalúa antes que la de año anterior y ambas devuelven revisión
+manual, nunca rechazo.
 
 ---
 
@@ -1160,7 +1204,10 @@ El motor de reglas utilizará inicialmente la siguiente prioridad:
 8. ERR_SIN_TOTAL, solo sin total visual ni OCR
 9. ERR_SIN_FECHA, solo sin fecha visual ni OCR
 10. OCR_LOW_CONFIDENCE, con un campo crítico exclusivo de OCR u OCR nulo con evidencia visual suficiente
-11. OK
+11. ERR_FECHA_FUTURA, solo con DateMatch = true
+12. ERR_FECHA_ANTIGUA, solo con DateMatch = true y año anterior
+13. ERR_SIN_CIF, para Meals/Diet/Breakfast/Lunch/Dinner/Material sin TaxId
+14. OK
 ```
 
 ---
@@ -1213,6 +1260,9 @@ ERR_SIN_FECHA
 DATE_MISMATCH
 TOTAL_MISMATCH
 OCR_LOW_CONFIDENCE
+ERR_SIN_CIF
+ERR_FECHA_ANTIGUA
+ERR_FECHA_FUTURA
 ```
 
 ---
@@ -1259,7 +1309,7 @@ products
 Campos:
 
 ```text
-ocrText
+concept
 normalizedText
 amount
 category

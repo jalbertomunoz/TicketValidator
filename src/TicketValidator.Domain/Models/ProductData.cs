@@ -4,7 +4,7 @@ namespace TicketValidator.Domain.Models;
 
 public sealed class ProductData
 {
-    public string? OcrText { get; init; }
+    public string? Concept { get; init; }
 
     public string? NormalizedText { get; init; }
 

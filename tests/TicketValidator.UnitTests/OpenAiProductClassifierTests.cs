@@ -28,7 +28,7 @@ public sealed class OpenAiProductClassifierTests
         {
             new ProductData
             {
-                OcrText = "CEREZAS",
+                Concept = "CEREZAS",
                 NormalizedText = "Cerezas",
                 Amount = 3.25m
             }
@@ -37,7 +37,7 @@ public sealed class OpenAiProductClassifierTests
         var result = ProductClassificationMapper.Map(products, Response(0, "food", false));
 
         var product = Assert.Single(result);
-        Assert.Equal("CEREZAS", product.OcrText);
+        Assert.Equal("CEREZAS", product.Concept);
         Assert.Equal("Cerezas", product.NormalizedText);
         Assert.Equal(3.25m, product.Amount);
         Assert.Equal(ProductCategory.Food, product.Category);
@@ -52,13 +52,13 @@ public sealed class OpenAiProductClassifierTests
     [InlineData("LICOR DE CEREZAS", "alcoholicBeverage", true, ProductCategory.AlcoholicBeverage)]
     [InlineData("ZUMO DE CEREZA", "nonAlcoholicBeverage", false, ProductCategory.NonAlcoholicBeverage)]
     public void Map_AppliesStructuredClassification(
-        string ocrText,
+        string concept,
         string category,
         bool isAlcohol,
         ProductCategory expectedCategory)
     {
         var result = ProductClassificationMapper.Map(
-            [new ProductData { OcrText = ocrText }],
+            [new ProductData { Concept = concept }],
             Response(0, category, isAlcohol));
 
         var product = Assert.Single(result);
@@ -70,7 +70,7 @@ public sealed class OpenAiProductClassifierTests
     public void Map_Throws_WhenResponseContainsAnUnexpectedIndex()
     {
         var exception = Assert.Throws<InvalidOperationException>(() => ProductClassificationMapper.Map(
-            [new ProductData { OcrText = "AGUA" }],
+            [new ProductData { Concept = "AGUA" }],
             Response(1, "nonAlcoholicBeverage", false)));
 
         Assert.Equal("OpenAI returned a classification for an unexpected product index.", exception.Message);
@@ -80,7 +80,7 @@ public sealed class OpenAiProductClassifierTests
     public void Map_UsesUnknownAndNull_WhenClassificationIsUnknown()
     {
         var result = ProductClassificationMapper.Map(
-            [new ProductData { OcrText = "PRODUCTO ILEGIBLE" }],
+            [new ProductData { Concept = "PRODUCTO ILEGIBLE" }],
             Response(0, null, null));
 
         var product = Assert.Single(result);
@@ -89,12 +89,12 @@ public sealed class OpenAiProductClassifierTests
     }
 
     [Fact]
-    public void Map_UsesUnknownAndNull_WhenOcrTextIsEmpty()
+    public void Map_UsesUnknownAndNull_WhenConceptIsEmpty()
     {
         var result = ProductClassificationMapper.Map(
             [new ProductData
             {
-                OcrText = " ",
+                Concept = " ",
                 NormalizedText = "Sin texto",
                 Amount = 1.50m,
                 Category = ProductCategory.Food,
@@ -103,7 +103,7 @@ public sealed class OpenAiProductClassifierTests
             new ProductClassificationResponse());
 
         var product = Assert.Single(result);
-        Assert.Equal(" ", product.OcrText);
+        Assert.Equal(" ", product.Concept);
         Assert.Equal("Sin texto", product.NormalizedText);
         Assert.Equal(1.50m, product.Amount);
         Assert.Equal(ProductCategory.Unknown, product.Category);

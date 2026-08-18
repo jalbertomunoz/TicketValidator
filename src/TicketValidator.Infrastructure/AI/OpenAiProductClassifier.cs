@@ -38,7 +38,7 @@ public sealed class OpenAiProductClassifier : IProductClassifier
             return [];
         }
 
-        if (products.All(product => string.IsNullOrWhiteSpace(product.OcrText)))
+        if (products.All(product => string.IsNullOrWhiteSpace(product.Concept)))
         {
             return ProductClassificationMapper.Map(products, new ProductClassificationResponse());
         }

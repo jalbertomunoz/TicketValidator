@@ -58,32 +58,9 @@ public sealed class AnalyzeTicketPipelineIntegrationTests
         }
     }
 
-    [Fact]
-    public async Task HandleAsync_ExtractionFailure_RethrowsAndWritesProcessingErrorAuditLog()
-    {
-        var directoryPath = CreateTemporaryDirectoryPath();
-        try
-        {
-            var handler = CreateHandler(PipelineScenarios.ExtractionFailure(), directoryPath);
-
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                handler.HandleAsync(new AnalyzeTicketCommand([0x89, 0x50, 0x4E, 0x47], ExpenseType.Meals)));
-
-            var line = Assert.Single(await File.ReadAllLinesAsync(GetLogFilePath(directoryPath)));
-            Assert.Contains("Status=PROCESSING_ERROR", line);
-            Assert.Contains("ReasonCode= |", line);
-            Assert.Contains("ErrorType=InvalidOperationException", line);
-        }
-        finally
-        {
-            DeleteTemporaryDirectory(directoryPath);
-        }
-    }
-
     private static AnalyzeTicketHandler CreateHandler(PipelineScenario scenario, string directoryPath) => new(
         new ScenarioDocumentOrientationService(),
         new ScenarioOcrService(scenario),
-        new ScenarioTicketExtractor(scenario),
         new ScenarioProductClassifier(),
         new ScenarioExpenseCoherenceAnalyzer(scenario),
         new ScenarioVisualAnalysisService(scenario),

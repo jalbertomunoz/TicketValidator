@@ -28,11 +28,9 @@ public sealed class TicketVerificationService : ITicketVerificationService
 
     public VerificationResult Verify(
         OcrResult ocrResult,
-        AiTicketExtraction aiExtraction,
         VisualAnalysisResult visualAnalysis)
     {
         ArgumentNullException.ThrowIfNull(ocrResult);
-        ArgumentNullException.ThrowIfNull(aiExtraction);
         ArgumentNullException.ThrowIfNull(visualAnalysis);
 
         var evidenceText = GetEvidenceText(ocrResult);

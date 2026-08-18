@@ -30,7 +30,7 @@ public sealed class OpenAiTicketExtractorTests
     }
 
     [Fact]
-    public void Map_PreservesProductOcrTextWithoutSemanticSubstitution()
+    public void Map_PreservesProductConceptWithoutSemanticSubstitution()
     {
         var extraction = TicketExtractionMapper.Map(new TicketExtractionResponse
         {
@@ -46,7 +46,7 @@ public sealed class OpenAiTicketExtractorTests
         });
 
         var product = Assert.Single(extraction.Ticket.Products);
-        Assert.Equal("CEREZAS", product.OcrText);
+        Assert.Equal("CEREZAS", product.Concept);
         Assert.Equal("Cerezas", product.NormalizedText);
         Assert.Equal(3.50m, product.Amount);
         Assert.Null(product.Category);

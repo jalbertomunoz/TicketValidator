@@ -149,7 +149,7 @@ public sealed class TicketsController : ControllerBase
         Total = ticket.Total,
         Products = ticket.Products.Select(product => new ProductResponse
         {
-            OcrText = product.OcrText,
+            Concept = product.Concept,
             NormalizedText = product.NormalizedText,
             Amount = product.Amount,
             Category = product.Category?.ToString(),
@@ -197,6 +197,9 @@ public sealed class TicketsController : ControllerBase
         ReasonCode.ErrTipoGastoIncoherente => "ERR_TIPO_GASTO_INCOHERENTE",
         ReasonCode.ErrSinTotal => "ERR_SIN_TOTAL",
         ReasonCode.ErrSinFecha => "ERR_SIN_FECHA",
+        ReasonCode.ErrSinCif => "ERR_SIN_CIF",
+        ReasonCode.ErrFechaAntigua => "ERR_FECHA_ANTIGUA",
+        ReasonCode.ErrFechaFutura => "ERR_FECHA_FUTURA",
         ReasonCode.DocumentTypeMismatch => "DOCUMENT_TYPE_MISMATCH",
         ReasonCode.DateMismatch => "DATE_MISMATCH",
         ReasonCode.TotalMismatch => "TOTAL_MISMATCH",

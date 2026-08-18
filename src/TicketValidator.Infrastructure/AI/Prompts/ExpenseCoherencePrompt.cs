@@ -12,7 +12,7 @@ internal static class ExpenseCoherencePrompt
 
         Devuelve isCoherent true cuando la compra sea razonablemente coherente, false solo cuando la mayoria sea claramente incoherente y null cuando no haya evidencia suficiente. Valora preferentemente el peso economico cuando haya importes y, si no lo hay, el numero de lineas. Un unico articulo secundario incompatible no vuelve incoherente toda la compra. incompatibleIndexes solo incluye conceptos claramente incompatibles.
 
-        Usa el concepto OCR completo y el contexto del establecimiento. Para Meals, Diet, Breakfast, Lunch y Dinner son coherentes principalmente alimentacion, comida preparada, bebidas no alcoholicas y consumo inmediato. En restauracion, chuletón, carne, pescado, pollo, pizza, hamburguesa, menu, bocadillo, ensalada, cafe y agua son validos. En supermercado, los preparados y listos para consumir son validos, mientras que carne o pescado crudo, ingredientes para cocinar y productos no alimentarios solo hacen incoherente la compra si constituyen la mayoria. HAMBURGUESA PLASTICA, FLAUTA DE BACON Y QUESO, BOCADILLO VEGETAL y CEREZAS no son incompatibles por si mismos.
+        Usa el concepto completo y el contexto del establecimiento. Para Meals, Diet, Breakfast, Lunch y Dinner son coherentes principalmente alimentacion, comida preparada, bebidas no alcoholicas y consumo inmediato. En restauracion, chuletón, carne, pescado, pollo, pizza, hamburguesa, menu, bocadillo, ensalada, cafe y agua son validos. En supermercado, los preparados y listos para consumir son validos, mientras que carne o pescado crudo, ingredientes para cocinar y productos no alimentarios solo hacen incoherente la compra si constituyen la mayoria. HAMBURGUESA PLASTICA, FLAUTA DE BACON Y QUESO, BOCADILLO VEGETAL y CEREZAS no son incompatibles por si mismos.
 
         Para Fuel busca gasolina, diesel, gasoleo, GLP, recarga electrica o equivalentes. Para Accommodation busca principalmente alojamiento, habitacion u otros servicios hoteleros. Para Taxi busca taxi, VTC o transporte urbano equivalente. Para Parking busca parking, aparcamiento o estacionamiento. Para Material busca material de oficina, consumibles, herramientas o material informatico y tecnico. Para Highway considera coherente un peaje o concepto de autopista salvo evidencia clara de otro tipo de gasto. Para Other se conservador: ante duda devuelve null o true, nunca false por intuicion. El alcohol se evalua mediante una regla independiente y no debe hacer que la compra sea incoherente por si solo.
 
@@ -30,12 +30,12 @@ internal static class ExpenseCoherencePrompt
         for (var index = 0; index < ticket.Products.Count; index++)
         {
             var product = ticket.Products[index];
-            if (string.IsNullOrWhiteSpace(product.OcrText))
+            if (string.IsNullOrWhiteSpace(product.Concept))
             {
                 continue;
             }
 
-            message.Append(index).Append(": ").Append(product.OcrText);
+            message.Append(index).Append(": ").Append(product.Concept);
             if (product.Amount is not null)
             {
                 message.Append(" | amount: ").Append(product.Amount.Value.ToString("0.00", CultureInfo.InvariantCulture));

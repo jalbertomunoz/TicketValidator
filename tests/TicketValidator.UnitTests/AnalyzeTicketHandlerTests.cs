@@ -33,17 +33,16 @@ public sealed class AnalyzeTicketHandlerTests
         var fakes = new HandlerFakes
         {
             OcrResult = new OcrResult { RawText = "OCR evidence" },
-            AiExtraction = new AiTicketExtraction { Ticket = expectedTicket },
             VerificationResult = new VerificationResult { Verification = expectedVerification },
             Decision = expectedDecision
         };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult { EstablishmentName = expectedTicket.EstablishmentName };
         var handler = fakes.CreateHandler();
 
         var result = await handler.HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
 
         Assert.Equal(1, fakes.Orientation.CallCount);
         Assert.Equal(1, fakes.Ocr.CallCount);
-        Assert.Equal(1, fakes.Extractor.CallCount);
         Assert.Equal(1, fakes.ProductClassifier.CallCount);
         Assert.Equal(1, fakes.ExpenseCoherenceAnalyzer.CallCount);
         Assert.Equal(1, fakes.VisualAnalysis.CallCount);
@@ -61,22 +60,19 @@ public sealed class AnalyzeTicketHandlerTests
     [Fact]
     public async Task HandleAsync_PassesClassifiedProductsToRuleEngine()
     {
-        var extractedProduct = new ProductData { OcrText = "CERVEZA", NormalizedText = "Cerveza", Amount = 3m };
+        var extractedProduct = new ProductData { Concept = "CERVEZA", NormalizedText = "Cerveza", Amount = 3m };
         var classifiedProduct = new ProductData
         {
-            OcrText = "CERVEZA",
+            Concept = "CERVEZA",
             NormalizedText = "Cerveza",
             Amount = 3m,
             IsAlcohol = true
         };
         var fakes = new HandlerFakes
         {
-            AiExtraction = new AiTicketExtraction
-            {
-                Ticket = new TicketData { Products = [extractedProduct] }
-            },
             ClassifiedProducts = [classifiedProduct]
         };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult { Products = [extractedProduct] };
 
         await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
 
@@ -90,23 +86,20 @@ public sealed class AnalyzeTicketHandlerTests
     {
         var classifiedProduct = new ProductData
         {
-            OcrText = "AGUA",
+            Concept = "AGUA",
             NormalizedText = "Agua",
             Amount = 2.50m,
             IsAlcohol = false
         };
         var fakes = new HandlerFakes
         {
-            AiExtraction = new AiTicketExtraction
-            {
-                Ticket = new TicketData
-                {
-                    EstablishmentName = "Restaurant",
-                    Total = 2.50m,
-                    Products = [new ProductData { OcrText = "AGUA" }]
-                }
-            },
             ClassifiedProducts = [classifiedProduct]
+        };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult
+        {
+            EstablishmentName = "Restaurant",
+            VisualTotal = 2.50m,
+            Products = [new ProductData { Concept = "AGUA" }]
         };
 
         var result = await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
@@ -118,15 +111,91 @@ public sealed class AnalyzeTicketHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_PrioritizesVisualDateOverExtractedDate()
+    public async Task HandleAsync_UsesVisualSemanticFieldsWithoutOcrFallback()
+    {
+        var fakes = new HandlerFakes();
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult
+        {
+            EstablishmentName = "Proveedor visual",
+            TaxId = "B12345678",
+            InvoiceNumber = "F-1",
+            Time = "14:30",
+            Address = new AddressData { Street = "Calle Mayor 1" },
+            VatDetails = [new VatData { Rate = 10m }]
+        };
+
+        var result = await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
+
+        Assert.Equal("Proveedor visual", result.Ticket.EstablishmentName);
+        Assert.Equal("B12345678", result.Ticket.TaxId);
+        Assert.Equal("F-1", result.Ticket.InvoiceNumber);
+        Assert.Equal("14:30", result.Ticket.Time);
+        Assert.Equal("Calle Mayor 1", result.Ticket.Address!.Street);
+        Assert.Equal(10m, Assert.Single(result.Ticket.VatDetails).Rate);
+    }
+
+    [Fact]
+    public async Task HandleAsync_KeepsVisualIssuerTaxIdAndAddress_WhenOcrContainsCustomerData()
     {
         var fakes = new HandlerFakes
         {
-            AiExtraction = new AiTicketExtraction
-            {
-                Ticket = new TicketData { Date = new DateOnly(2026, 2, 25) }
-            }
+            OcrResult = new OcrResult { RawText = "CLIENTE CIF B99999999\nCalle del cliente 2" }
         };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult
+        {
+            EstablishmentName = "Proveedor visual",
+            TaxId = "B12345678",
+            Address = new AddressData { Street = "Calle del proveedor 1" }
+        };
+
+        var result = await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
+
+        Assert.Equal("Proveedor visual", result.Ticket.EstablishmentName);
+        Assert.Equal("B12345678", result.Ticket.TaxId);
+        Assert.Equal("Calle del proveedor 1", result.Ticket.Address!.Street);
+    }
+
+    [Fact]
+    public async Task HandleAsync_RejectsVisualAlcoholProduct_WhenOcrIsEmpty()
+    {
+        var fakes = new HandlerFakes { OcrResult = new OcrResult() };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult
+        {
+            VisualDocumentType = DocumentType.Receipt,
+            VisualDate = new DateOnly(2026, 8, 16),
+            VisualTotal = 12.50m,
+            Products = [new ProductData { Concept = "CERVEZA MAHOU" }]
+        };
+        fakes.ClassifiedProducts = [new ProductData { Concept = "CERVEZA MAHOU", IsAlcohol = true }];
+
+        var result = await HandleWithRealVerificationAndRulesAsync(fakes);
+
+        Assert.Equal(AnalysisStatus.Rejected, result.Decision.Status);
+        Assert.Equal(ReasonCode.ErrBebidaAlcoholica, result.Decision.ReasonCode);
+        Assert.Equal("CERVEZA MAHOU", Assert.Single(result.Ticket.Products).Concept);
+        Assert.Equal("CERVEZA MAHOU", Assert.Single(fakes.ProductClassifier.ReceivedProducts!).Concept);
+    }
+
+    [Fact]
+    public async Task HandleAsync_UsesVisualProducts_WhenOcrIsEmpty()
+    {
+        var fakes = new HandlerFakes { OcrResult = new OcrResult() };
+        fakes.VisualAnalysis.Result = new VisualAnalysisResult
+        {
+            Products = [new ProductData { Concept = "AGUA" }]
+        };
+        fakes.ClassifiedProducts = [new ProductData { Concept = "AGUA", IsAlcohol = false }];
+
+        var result = await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
+
+        Assert.Equal("AGUA", Assert.Single(result.Ticket.Products).Concept);
+        Assert.Equal("AGUA", Assert.Single(fakes.ProductClassifier.ReceivedProducts!).Concept);
+    }
+
+    [Fact]
+    public async Task HandleAsync_UsesVisualDate()
+    {
+        var fakes = new HandlerFakes();
         fakes.VisualAnalysis.Result = new VisualAnalysisResult
         {
             VisualDate = new DateOnly(2026, 2, 26)
@@ -139,15 +208,9 @@ public sealed class AnalyzeTicketHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_PrioritizesVisualTotalOverExtractedTotal()
+    public async Task HandleAsync_UsesVisualTotal()
     {
-        var fakes = new HandlerFakes
-        {
-            AiExtraction = new AiTicketExtraction
-            {
-                Ticket = new TicketData { Total = 6.58m }
-            }
-        };
+        var fakes = new HandlerFakes();
         fakes.VisualAnalysis.Result = new VisualAnalysisResult { VisualTotal = 6.50m };
 
         var result = await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
@@ -161,7 +224,6 @@ public sealed class AnalyzeTicketHandlerTests
     {
         var fakes = new HandlerFakes
         {
-            AiExtraction = new AiTicketExtraction { Ticket = new TicketData { Products = [] } },
             ClassifiedProducts = []
         };
 
@@ -173,7 +235,7 @@ public sealed class AnalyzeTicketHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ReturnsUnreadableAndSkipsAiServices_WhenOcrHasNoEvidenceAndVisualIsUnknown()
+    public async Task HandleAsync_ReturnsUnreadable_WhenOcrHasNoEvidenceAndVisualIsUnknown()
     {
         var fakes = new HandlerFakes { OcrResult = new OcrResult() };
         fakes.VisualAnalysis.Result = new VisualAnalysisResult { VisualDocumentType = DocumentType.Unknown };
@@ -183,11 +245,11 @@ public sealed class AnalyzeTicketHandlerTests
         Assert.Equal(AnalysisStatus.Unreadable, result.Decision.Status);
         Assert.Equal(ReasonCode.ErrNoLegible, result.Decision.ReasonCode);
         Assert.Equal(string.Empty, result.OcrRawText);
-        AssertNoOcrEvidenceServicesWereCalled(fakes);
+        AssertVisualServicesWereCalled(fakes);
     }
 
     [Fact]
-    public async Task HandleAsync_ReturnsUnreadableAndSkipsAiServices_WhenOcrHasNoEvidenceAndVisualIsReceipt()
+    public async Task HandleAsync_ReturnsUnreadable_WhenOcrHasNoEvidenceAndVisualIsReceipt()
     {
         var fakes = new HandlerFakes { OcrResult = new OcrResult() };
         fakes.VisualAnalysis.Result = new VisualAnalysisResult { VisualDocumentType = DocumentType.Receipt };
@@ -196,7 +258,7 @@ public sealed class AnalyzeTicketHandlerTests
 
         Assert.Equal(AnalysisStatus.Unreadable, result.Decision.Status);
         Assert.Equal(ReasonCode.ErrNoLegible, result.Decision.ReasonCode);
-        AssertNoOcrEvidenceServicesWereCalled(fakes);
+        AssertVisualServicesWereCalled(fakes);
     }
 
     [Theory]
@@ -220,11 +282,11 @@ public sealed class AnalyzeTicketHandlerTests
         Assert.Equal(visualDocumentType, result.Ticket.DocumentType);
         Assert.Equal(new DateOnly(2026, 2, 26), result.Ticket.Date);
         Assert.Equal(6.50m, result.Ticket.Total);
-        AssertNoOcrEvidenceServicesWereCalled(fakes);
+        AssertVisualServicesWereCalled(fakes);
     }
 
     [Fact]
-    public async Task HandleAsync_ApprovesWhenOcrIsPartialAndVisualReadsCriticalFields()
+    public async Task HandleAsync_RequiresReviewWhenOcrIsPartialAndVisualReadsCriticalFields()
     {
         var fakes = new HandlerFakes { OcrResult = new OcrResult { RawText = "Capri EFECTI" } };
         fakes.VisualAnalysis.Result = new VisualAnalysisResult
@@ -236,12 +298,11 @@ public sealed class AnalyzeTicketHandlerTests
 
         var result = await HandleWithRealVerificationAndRulesAsync(fakes);
 
-        Assert.Equal(AnalysisStatus.Approved, result.Decision.Status);
-        Assert.Equal(ReasonCode.Ok, result.Decision.ReasonCode);
+        Assert.Equal(AnalysisStatus.ReviewRequired, result.Decision.Status);
+        Assert.Equal(ReasonCode.OcrLowConfidence, result.Decision.ReasonCode);
         Assert.Null(result.Verification.OcrDate);
         Assert.Null(result.Verification.OcrTotal);
         Assert.Equal(DocumentType.Receipt, result.Ticket.DocumentType);
-        Assert.Equal(1, fakes.Extractor.CallCount);
         Assert.Equal(1, fakes.ProductClassifier.CallCount);
         Assert.Equal(1, fakes.ExpenseCoherenceAnalyzer.CallCount);
     }
@@ -249,15 +310,9 @@ public sealed class AnalyzeTicketHandlerTests
     [Theory]
     [InlineData(DocumentType.Receipt)]
     [InlineData(DocumentType.Invoice)]
-    public async Task HandleAsync_CompletesUnknownDocumentTypeFromVisualAnalysis(DocumentType visualDocumentType)
+    public async Task HandleAsync_UsesVisualDocumentType(DocumentType visualDocumentType)
     {
-        var fakes = new HandlerFakes
-        {
-            AiExtraction = new AiTicketExtraction
-            {
-                Ticket = new TicketData { DocumentType = DocumentType.Unknown }
-            }
-        };
+        var fakes = new HandlerFakes();
         fakes.VisualAnalysis.Result = new VisualAnalysisResult { VisualDocumentType = visualDocumentType };
 
         var result = await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
@@ -267,7 +322,7 @@ public sealed class AnalyzeTicketHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ReturnsNoDocumentAndSkipsAiServices_WhenOcrHasNoEvidenceAndVisualIsNotDocument()
+    public async Task HandleAsync_ReturnsNoDocument_WhenOcrHasNoEvidenceAndVisualIsNotDocument()
     {
         var fakes = new HandlerFakes { OcrResult = new OcrResult() };
         fakes.VisualAnalysis.Result = new VisualAnalysisResult { VisualDocumentType = DocumentType.NotDocument };
@@ -276,7 +331,7 @@ public sealed class AnalyzeTicketHandlerTests
 
         Assert.Equal(AnalysisStatus.Rejected, result.Decision.Status);
         Assert.Equal(ReasonCode.ErrNoDocumento, result.Decision.ReasonCode);
-        AssertNoOcrEvidenceServicesWereCalled(fakes);
+        AssertVisualServicesWereCalled(fakes);
     }
 
     [Fact]
@@ -285,22 +340,6 @@ public sealed class AnalyzeTicketHandlerTests
         var expectedException = new InvalidOperationException("OCR failed.");
         var fakes = new HandlerFakes();
         fakes.Ocr.Handler = (_, _) => Task.FromException<OcrResult>(expectedException);
-        var handler = fakes.CreateHandler();
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => handler.HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals)));
-
-        Assert.Same(expectedException, exception);
-        Assert.Single(fakes.AuditLogger.Entries);
-        Assert.Same(expectedException, fakes.AuditLogger.Entries[0].Error);
-    }
-
-    [Fact]
-    public async Task HandleAsync_RethrowsAndAudits_WhenAiExtractionFails()
-    {
-        var expectedException = new InvalidOperationException("Extraction failed.");
-        var fakes = new HandlerFakes();
-        fakes.Extractor.Handler = (_, _) => Task.FromException<AiTicketExtraction>(expectedException);
         var handler = fakes.CreateHandler();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -357,51 +396,14 @@ public sealed class AnalyzeTicketHandlerTests
         Assert.Same(expectedException, fakes.AuditLogger.Entries[0].Error);
     }
 
-    [Fact]
-    public async Task HandleAsync_StartsProductClassificationWhileVisualAnalysisIsPending()
-    {
-        var extractionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var visualStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var extractionCompletion = new TaskCompletionSource<AiTicketExtraction>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var visualCompletion = new TaskCompletionSource<VisualAnalysisResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var classificationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var fakes = new HandlerFakes();
-        fakes.Extractor.Handler = async (_, _) =>
-        {
-            extractionStarted.TrySetResult();
-            return await extractionCompletion.Task;
-        };
-        fakes.VisualAnalysis.Handler = async (_, _) =>
-        {
-            visualStarted.TrySetResult();
-            return await visualCompletion.Task;
-        };
-        fakes.ProductClassifier.Handler = (_, _) =>
-        {
-            classificationStarted.TrySetResult();
-            return Task.FromResult<IReadOnlyList<ProductData>>([]);
-        };
-
-        var handlingTask = fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
-        await Task.WhenAll(extractionStarted.Task, visualStarted.Task);
-        extractionCompletion.SetResult(new AiTicketExtraction());
-        await classificationStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
-
-        Assert.False(visualCompletion.Task.IsCompleted);
-
-        visualCompletion.SetResult(new VisualAnalysisResult());
-        await handlingTask;
-    }
-
     private static Task<AnalyzeTicketResult> HandleWithRealVerificationAndRulesAsync(HandlerFakes fakes) =>
         fakes.CreateHandler(new TicketVerificationService(), new ExpenseRuleEngine())
             .HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
 
-    private static void AssertNoOcrEvidenceServicesWereCalled(HandlerFakes fakes)
+    private static void AssertVisualServicesWereCalled(HandlerFakes fakes)
     {
-        Assert.Equal(0, fakes.Extractor.CallCount);
-        Assert.Equal(0, fakes.ProductClassifier.CallCount);
-        Assert.Equal(0, fakes.ExpenseCoherenceAnalyzer.CallCount);
+        Assert.Equal(1, fakes.ProductClassifier.CallCount);
+        Assert.Equal(1, fakes.ExpenseCoherenceAnalyzer.CallCount);
         Assert.Equal(1, fakes.VisualAnalysis.CallCount);
     }
 
@@ -410,8 +412,6 @@ public sealed class AnalyzeTicketHandlerTests
         public OrientationFake Orientation { get; } = new();
 
         public OcrFake Ocr { get; } = new();
-
-        public AiExtractorFake Extractor { get; } = new();
 
         public ProductClassifierFake ProductClassifier { get; } = new();
 
@@ -428,11 +428,6 @@ public sealed class AnalyzeTicketHandlerTests
         public OcrResult OcrResult
         {
             set => Ocr.Result = value;
-        }
-
-        public AiTicketExtraction AiExtraction
-        {
-            set => Extractor.Result = value;
         }
 
         public IReadOnlyList<ProductData> ClassifiedProducts
@@ -455,7 +450,6 @@ public sealed class AnalyzeTicketHandlerTests
             IExpenseRuleEngine? expenseRuleEngine = null) => new(
             Orientation,
             Ocr,
-            Extractor,
             ProductClassifier,
             ExpenseCoherenceAnalyzer,
             VisualAnalysis,
@@ -487,21 +481,6 @@ public sealed class AnalyzeTicketHandlerTests
         {
             CallCount++;
             return Handler?.Invoke(image, cancellationToken) ?? Task.FromResult(Result);
-        }
-    }
-
-    private sealed class AiExtractorFake : IAiTicketExtractor
-    {
-        public int CallCount { get; private set; }
-
-        public AiTicketExtraction Result { get; set; } = new();
-
-        public Func<string, CancellationToken, Task<AiTicketExtraction>>? Handler { get; set; }
-
-        public Task<AiTicketExtraction> ExtractAsync(string ocrText, CancellationToken cancellationToken = default)
-        {
-            CallCount++;
-            return Handler?.Invoke(ocrText, cancellationToken) ?? Task.FromResult(Result);
         }
     }
 
@@ -548,7 +527,6 @@ public sealed class AnalyzeTicketHandlerTests
 
         public VerificationResult Verify(
             OcrResult ocrResult,
-            AiTicketExtraction aiExtraction,
             VisualAnalysisResult visualAnalysis)
         {
             CallCount++;

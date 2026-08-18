@@ -236,12 +236,16 @@ vat
 products
 ```
 
-Para `date` y `total`, `AnalyzeTicketHandler` prioriza los valores visuales
-cuando existen. Si no hay valor visual conserva el valor estructurado de la
-extracción OCR para trazabilidad, pero el motor exige revisión cuando un campo
-crítico solo dispone de OCR.
-Para `documentType`, completa un valor ausente o `Unknown` con `Receipt` o
-`Invoice` visual; no sobrescribe un tipo positivo procedente de OCR.
+`AnalyzeTicketHandler` construye `TicketData` a partir de la lectura visual:
+tipo de documento, emisor, CIF, número, hora, dirección, IVA, productos, fecha y
+total. OCR solo aporta evidencia independiente para contrastar fecha y total,
+determinar legibilidad y facilitar diagnóstico; no completa campos visuales
+ausentes.
+`APPROVED` requiere `DateMatch = true` y `TotalMatch = true`, por lo que los dos
+campos críticos deben estar corroborados por OCR e IA visual.
+Con una fecha corroborada, el motor revisa anomalías temporales preventivas:
+futuro respecto a la fecha UTC actual o año anterior, sin rechazo automático.
+El tipo de documento también procede de la lectura visual.
 
 ---
 
@@ -252,7 +256,7 @@ Representa una línea de producto o servicio.
 Campos previstos:
 
 ```text
-ocrText
+concept
 normalizedText
 amount
 category
@@ -262,10 +266,10 @@ isAlcohol
 El campo:
 
 ```text
-ocrText
+concept
 ```
 
-conserva la evidencia original obtenida del documento.
+conserva el concepto visible de una línea realmente facturada.
 
 El campo:
 
@@ -280,7 +284,7 @@ La normalización nunca debe introducir un concepto diferente del original.
 Ejemplo no permitido:
 
 ```text
-OCR:
+Concepto:
 CEREZAS
 
 Normalized:
@@ -451,13 +455,19 @@ La IA deberá devolver `null` cuando un dato no pueda identificarse con suficien
 No debe completar datos ausentes.
 Sus fechas y totales estructurados no constituyen una segunda fuente independiente para la verificación.
 
+Tras centralizar la lectura semántica en `IVisualAnalysisService`,
+`OpenAiTicketExtractor` permanece registrado y cubierto de forma aislada, pero
+`AnalyzeTicketHandler` ya no lo invoca ni utiliza su resultado. Es deuda técnica
+pendiente de definir una responsabilidad auxiliar concreta o retirarlo en un
+cambio de alcance separado.
+
 ---
 
 ## 6.6 IVisualAnalysisService
 
-Responsable del análisis visual limitado del MVP.
+Responsable de la lectura visual principal del MVP.
 
-Clasifica explícitamente la imagen como ticket, factura, no documento o desconocida. Además de los indicios de manipulación, realiza una lectura independiente de fecha y total directamente desde la imagen para contrastarlos con OCR. `Unknown` no equivale a `NotDocument`.
+Clasifica explícitamente la imagen como ticket, factura, no documento o desconocida. Además de los indicios de manipulación, extrae directamente los datos del emisor, CIF, número, hora, dirección, IVA, líneas facturadas, fecha y total. Fecha y total se contrastan con OCR. `Unknown` no equivale a `NotDocument`.
 
 Analizará posibles indicios de:
 
@@ -518,9 +528,10 @@ La lectura visual es la fuente principal de fecha y total; OCR es el contraste.
 Una coincidencia marca `Match = true`, una ausencia de OCR deja `Match = null`
 y una discrepancia marca `Match = false`.
 `OcrReadable` solo expresa la existencia de texto OCR. Con OCR parcial, la
-ausencia de fecha o total OCR no impide aprobar los valores visuales. Con OCR
-nulo, una lectura visual suficiente evita `ERR_NO_LEGIBLE`, pero requiere
-`REVIEW_REQUIRED / OCR_LOW_CONFIDENCE` al no existir contraste independiente.
+ausencia de fecha o total OCR conserva los valores visuales, pero requiere
+`REVIEW_REQUIRED / OCR_LOW_CONFIDENCE`. Con OCR nulo, una lectura visual
+suficiente también evita `ERR_NO_LEGIBLE` y requiere revisión al no existir
+contraste independiente. `OcrReadable` no es suficiente para aprobar.
 
 Campos críticos iniciales:
 
@@ -728,10 +739,11 @@ implementado por:
 OpenAiVisualAnalysisService
 ```
 
-Esta operación analizará indicios visibles de manipulación y leerá fecha y total
-directamente desde la imagen como fuente principal, contrastándolos con OCR.
+Esta operación analiza indicios visibles de manipulación y extrae directamente
+los datos semánticos, productos, fecha y total como fuente principal. Fecha y
+total se contrastan con OCR.
 
-No debe extraer productos ni aplicar reglas de gasto.
+No aplica reglas de gasto ni decide el estado final.
 
 ---
 
@@ -794,7 +806,8 @@ La clasificación no puede modificar el texto original.
 
 ## 9.3 VisualAnalysisPrompt
 
-Responsable de la lectura visual independiente de fecha y total, y del análisis de indicios de manipulación.
+Responsable de la lectura visual principal de datos semánticos, productos, fecha,
+total e indicios de manipulación.
 
 No debe decidir la aceptación del ticket.
 
@@ -1040,6 +1053,9 @@ ERR_SIN_FECHA
 DATE_MISMATCH
 TOTAL_MISMATCH
 OCR_LOW_CONFIDENCE
+ERR_SIN_CIF
+ERR_FECHA_ANTIGUA
+ERR_FECHA_FUTURA
 ```
 
 ---
@@ -1091,7 +1107,7 @@ OCR obtiene texto, pero no ese campo
 
 → usar la lectura visual principal
 → `Match = null`, sin corroboración OCR
-→ puede aprobarse si no existe otra regla
+→ REVIEW_REQUIRED / OCR_LOW_CONFIDENCE
 ```
 
 ---
@@ -1121,6 +1137,15 @@ OCR lo obtiene
 
 ---
 
+## 18.6 Fecha temporalmente sospechosa
+
+Solo con `DateMatch = true`, el motor compara `VisualDate` con la fecha UTC que
+proporciona `TimeProvider`: una fecha futura produce `ERR_FECHA_FUTURA` y una
+fecha de un año anterior produce `ERR_FECHA_ANTIGUA`. Ambas requieren revisión;
+no se aplica una ventana de días o meses.
+
+---
+
 # 19. Motor de reglas
 
 El motor de reglas debe ser determinista.
@@ -1138,11 +1163,13 @@ Orden inicial de prioridad:
 8. ERR_SIN_TOTAL, solo sin total visual ni OCR
 9. ERR_SIN_FECHA, solo sin fecha visual ni OCR
 10. OCR_LOW_CONFIDENCE, con un campo crítico solo OCR o OCR nulo con evidencia visual suficiente
-11. OK
+11. ERR_FECHA_FUTURA, solo con DateMatch = true
+12. ERR_FECHA_ANTIGUA, solo con DateMatch = true y año anterior
+13. ERR_SIN_CIF, para Meals/Diet/Breakfast/Lunch/Dinner/Material sin TaxId
+14. OK
 ```
 
 `REVIEW_REQUIRED` se utilizará para discrepancias donde no exista una causa de rechazo de prioridad superior.
-Una contradicción entre `VisualDocumentType = NotDocument` y `TicketData.DocumentType = Receipt` o `Invoice` produce `DocumentTypeMismatch` y revisión humana.
 
 ---
 
