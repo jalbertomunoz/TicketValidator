@@ -505,6 +505,16 @@ Si OSD no dispone de evidencia suficiente para detectar la orientación, se
 conserva la imagen original y el OCR normal continúa. Los demás errores técnicos
 de Tesseract se propagan.
 
+`FallbackOcrOrientationService` coordina OSD y OCR antes del caso de uso. Si el
+primer OCR no tiene texto útil o reconoce menos de tres palabras, reutiliza ese
+resultado como candidato 0° y evalúa además 90°, 180° y 270° en sentido horario
+respecto a la imagen producida por OSD. Selecciona la mayor evidencia mediante
+palabras, confianza media y bonificaciones por fecha y total detectables. En
+empates conserva el candidato inicial y, después, la menor rotación. La imagen y
+el `OcrResult` seleccionados se entregan juntos al handler, que envía esa misma
+imagen al análisis visual. Es un fallback de robustez y no se activa con OCR
+suficiente.
+
 No forma parte del MVP:
 
 - Corrección fina de inclinación/skew.
@@ -670,21 +680,24 @@ PNG
 
 ---
 
-## 8.2 Orientación
+## 8.2 Orientación y OCR
 
 El fichero pasa por:
 
 ```text
-IDocumentOrientationService
+IOcrOrientationService
 ```
 
-y se obtiene una imagen correctamente orientada para OCR.
+y obtiene la imagen seleccionada junto con su `OcrResult`. Primero delega la
+orientación en `IDocumentOrientationService` (OSD) y ejecuta OCR. Solo ante OCR
+insuficiente prueba las cuatro rotaciones ortogonales y conserva la de mejor
+evidencia. No corrige inclinación fina, perspectiva ni aplica OpenCV.
 
 ---
 
 ## 8.3 OCR
 
-La imagen orientada se procesa mediante:
+La selección de orientación procesa las imágenes candidatas mediante:
 
 ```text
 IOcrService

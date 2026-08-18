@@ -218,8 +218,7 @@ public sealed class TicketsControllerTests
 
     private static TicketsController CreateController(AnalysisDecision? decision = null, long maxFileSizeBytes = UploadOptions.DefaultMaxFileSizeBytes) => new(
         new AnalyzeTicketHandler(
-            new OrientationStub(),
-            new OcrStub(),
+            new OcrOrientationStub(),
             new ProductClassifierStub(),
             new ExpenseCoherenceAnalyzerStub(),
             new VisualAnalysisStub(),
@@ -238,15 +237,14 @@ public sealed class TicketsControllerTests
         return file;
     }
 
-    private sealed class OrientationStub : IDocumentOrientationService
+    private sealed class OcrOrientationStub : IOcrOrientationService
     {
-        public Task<byte[]> OrientAsync(byte[] image, CancellationToken cancellationToken = default) => Task.FromResult(image);
-    }
-
-    private sealed class OcrStub : IOcrService
-    {
-        public Task<OcrResult> ReadAsync(byte[] image, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new OcrResult { RawText = "evidence" });
+        public Task<OcrOrientationResult> ReadBestAsync(byte[] image, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new OcrOrientationResult
+            {
+                Image = image,
+                OcrResult = new OcrResult { RawText = "evidence" }
+            });
     }
 
     private sealed class ProductClassifierStub : IProductClassifier

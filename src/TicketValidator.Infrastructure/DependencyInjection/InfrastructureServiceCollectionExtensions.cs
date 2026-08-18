@@ -23,6 +23,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton(options);
         services.AddTransient<IDocumentOrientationService, TesseractDocumentOrientationService>();
         services.AddTransient<IOcrService, TesseractOcrService>();
+        services.AddTransient<IOcrOrientationService, FallbackOcrOrientationService>();
         services.AddSingleton<ChatClient>(serviceProvider =>
         {
             var openAiOptions = serviceProvider.GetRequiredService<IOptions<OpenAiOptions>>().Value;

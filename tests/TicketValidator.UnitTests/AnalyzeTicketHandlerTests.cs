@@ -41,8 +41,7 @@ public sealed class AnalyzeTicketHandlerTests
 
         var result = await handler.HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
 
-        Assert.Equal(1, fakes.Orientation.CallCount);
-        Assert.Equal(1, fakes.Ocr.CallCount);
+        Assert.Equal(1, fakes.OcrOrientation.CallCount);
         Assert.Equal(1, fakes.ProductClassifier.CallCount);
         Assert.Equal(1, fakes.ExpenseCoherenceAnalyzer.CallCount);
         Assert.Equal(1, fakes.VisualAnalysis.CallCount);
@@ -55,6 +54,22 @@ public sealed class AnalyzeTicketHandlerTests
         Assert.Equal("OCR evidence", result.OcrRawText);
         Assert.Same(expectedVerification, result.Verification);
         Assert.Same(expectedDecision, result.Decision);
+    }
+
+    [Fact]
+    public async Task HandleAsync_UsesSelectedOcrOrientationImageForVisualAnalysis()
+    {
+        var fakes = new HandlerFakes();
+        fakes.OcrOrientation.Result = new OcrOrientationResult
+        {
+            Image = [9, 0, 9],
+            OcrResult = new OcrResult { RawText = "OCR evidence" },
+            SelectedRotation = 90
+        };
+
+        await fakes.CreateHandler().HandleAsync(new AnalyzeTicketCommand([1], ExpenseType.Meals));
+
+        Assert.Equal([9, 0, 9], fakes.VisualAnalysis.ReceivedImage);
     }
 
     [Fact]
@@ -339,7 +354,7 @@ public sealed class AnalyzeTicketHandlerTests
     {
         var expectedException = new InvalidOperationException("OCR failed.");
         var fakes = new HandlerFakes();
-        fakes.Ocr.Handler = (_, _) => Task.FromException<OcrResult>(expectedException);
+        fakes.OcrOrientation.Handler = (_, _) => Task.FromException<OcrOrientationResult>(expectedException);
         var handler = fakes.CreateHandler();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -409,9 +424,7 @@ public sealed class AnalyzeTicketHandlerTests
 
     private sealed class HandlerFakes
     {
-        public OrientationFake Orientation { get; } = new();
-
-        public OcrFake Ocr { get; } = new();
+        public OcrOrientationFake OcrOrientation { get; } = new();
 
         public ProductClassifierFake ProductClassifier { get; } = new();
 
@@ -427,7 +440,7 @@ public sealed class AnalyzeTicketHandlerTests
 
         public OcrResult OcrResult
         {
-            set => Ocr.Result = value;
+            set => OcrOrientation.Result = new OcrOrientationResult { Image = [1], OcrResult = value };
         }
 
         public IReadOnlyList<ProductData> ClassifiedProducts
@@ -448,8 +461,7 @@ public sealed class AnalyzeTicketHandlerTests
         public AnalyzeTicketHandler CreateHandler(
             ITicketVerificationService? ticketVerificationService = null,
             IExpenseRuleEngine? expenseRuleEngine = null) => new(
-            Orientation,
-            Ocr,
+            OcrOrientation,
             ProductClassifier,
             ExpenseCoherenceAnalyzer,
             VisualAnalysis,
@@ -458,26 +470,19 @@ public sealed class AnalyzeTicketHandlerTests
             AuditLogger);
     }
 
-    private sealed class OrientationFake : IDocumentOrientationService
+    private sealed class OcrOrientationFake : IOcrOrientationService
     {
         public int CallCount { get; private set; }
 
-        public Task<byte[]> OrientAsync(byte[] image, CancellationToken cancellationToken = default)
+        public OcrOrientationResult Result { get; set; } = new()
         {
-            CallCount++;
-            return Task.FromResult(image);
-        }
-    }
+            Image = [1],
+            OcrResult = new OcrResult { RawText = "OCR evidence" }
+        };
 
-    private sealed class OcrFake : IOcrService
-    {
-        public int CallCount { get; private set; }
+        public Func<byte[], CancellationToken, Task<OcrOrientationResult>>? Handler { get; set; }
 
-        public OcrResult Result { get; set; } = new() { RawText = "OCR evidence" };
-
-        public Func<byte[], CancellationToken, Task<OcrResult>>? Handler { get; set; }
-
-        public Task<OcrResult> ReadAsync(byte[] image, CancellationToken cancellationToken = default)
+        public Task<OcrOrientationResult> ReadBestAsync(byte[] image, CancellationToken cancellationToken = default)
         {
             CallCount++;
             return Handler?.Invoke(image, cancellationToken) ?? Task.FromResult(Result);
@@ -490,11 +495,14 @@ public sealed class AnalyzeTicketHandlerTests
 
         public VisualAnalysisResult Result { get; set; } = new();
 
+        public byte[]? ReceivedImage { get; private set; }
+
         public Func<byte[], CancellationToken, Task<VisualAnalysisResult>>? Handler { get; set; }
 
         public Task<VisualAnalysisResult> AnalyzeAsync(byte[] image, CancellationToken cancellationToken = default)
         {
             CallCount++;
+            ReceivedImage = image;
             return Handler?.Invoke(image, cancellationToken) ?? Task.FromResult(Result);
         }
     }

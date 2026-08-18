@@ -504,6 +504,13 @@ imagen original. Si OSD no puede detectar orientación por falta de evidencia,
 también se conservará la imagen original y continuará OCR normal. Este umbral
 no es confianza OCR de negocio.
 
+Si ese primer OCR no contiene texto útil o reconoce menos de tres palabras, el
+sistema probará 0/90/180/270, reutilizando el resultado inicial para 0°, y
+seleccionará de forma determinista la mayor evidencia OCR. La imagen elegida y
+su resultado OCR se usarán en el resto del pipeline. Este fallback no se ejecuta
+cuando el OCR inicial es suficiente y no incluye inclinación fina, perspectiva ni
+OpenCV.
+
 ---
 
 ## RF-005 — Rotación

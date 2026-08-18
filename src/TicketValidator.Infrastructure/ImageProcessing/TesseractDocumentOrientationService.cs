@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using TicketValidator.Application.Abstractions;
 using TicketValidator.Infrastructure.OCR;
 using TesseractOCR;
@@ -11,8 +10,6 @@ namespace TicketValidator.Infrastructure.ImageProcessing;
 public sealed class TesseractDocumentOrientationService : IDocumentOrientationService
 {
     private const float DefaultMinimumOrientationConfidence = 15f;
-    private static readonly byte[] JpegSignature = [0xFF, 0xD8, 0xFF];
-    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
     private readonly TesseractOcrOptions _options;
     private readonly float _minimumOrientationConfidence;
 
@@ -55,8 +52,7 @@ public sealed class TesseractDocumentOrientationService : IDocumentOrientationSe
                 return Task.FromResult(image);
             }
 
-            using var rotated = RotateToUpright(pix, orientation);
-            return Task.FromResult(Encode(rotated, GetImageFormat(image)));
+            return Task.FromResult(OrthogonalImageRotation.RotateClockwise(image, ToClockwiseRotation(orientation)));
         }
         catch (TesseractException exception) when (
             exception.Message.Equals("Failed to detect image orientation", StringComparison.Ordinal))
@@ -77,62 +73,11 @@ public sealed class TesseractDocumentOrientationService : IDocumentOrientationSe
             : Path.GetFullPath(_options.TessdataPath, AppContext.BaseDirectory);
     }
 
-    private static Image RotateToUpright(Image image, int orientation) => orientation switch
+    private static int ToClockwiseRotation(int orientation) => orientation switch
     {
-        90 => image.Rotate90(RotationDirection.CounterClockwise),
-        180 => Rotate180(image),
-        270 => image.Rotate90(RotationDirection.Clockwise),
-        _ => image.Clone()
+        90 => 270,
+        180 => 180,
+        270 => 90,
+        _ => 0
     };
-
-    private static Image Rotate180(Image image)
-    {
-        using var firstRotation = image.Rotate90(RotationDirection.Clockwise);
-        return firstRotation.Rotate90(RotationDirection.Clockwise);
-    }
-
-    private static ImageFormat GetImageFormat(byte[] image)
-    {
-        if (image.AsSpan().StartsWith(JpegSignature))
-        {
-            return ImageFormat.JfifJpeg;
-        }
-
-        if (image.AsSpan().StartsWith(PngSignature))
-        {
-            return ImageFormat.Png;
-        }
-
-        throw new InvalidOperationException("Only JPEG and PNG images are supported for orientation correction.");
-    }
-
-    private static byte[] Encode(Image image, ImageFormat imageFormat)
-    {
-        if (PixWriteMem(out var data, out var size, image.Handle, imageFormat) != 0 || data == IntPtr.Zero)
-        {
-            throw new InvalidOperationException("Failed to encode the oriented image.");
-        }
-
-        try
-        {
-            var length = checked((int)size.ToUInt64());
-            var result = new byte[length];
-            Marshal.Copy(data, result, 0, length);
-            return result;
-        }
-        finally
-        {
-            LeptFree(data);
-        }
-    }
-
-    [DllImport("leptonica-1.85.0.dll", CallingConvention = CallingConvention.Cdecl, EntryPoint = "pixWriteMem")]
-    private static extern int PixWriteMem(
-        out IntPtr data,
-        out UIntPtr size,
-        HandleRef image,
-        ImageFormat imageFormat);
-
-    [DllImport("leptonica-1.85.0.dll", CallingConvention = CallingConvention.Cdecl, EntryPoint = "lept_free")]
-    private static extern void LeptFree(IntPtr data);
 }

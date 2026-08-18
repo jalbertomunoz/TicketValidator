@@ -490,8 +490,11 @@ El MVP solo contempla:
 - Detección de orientación.
 - Rotación.
 
-La orientación gruesa 0/90/180/270 se realizará mediante Tesseract OSD. El
-ticket inclinado aproximadamente 10 grados permanece como limitación conocida.
+La orientación gruesa 0/90/180/270 se intentará primero mediante Tesseract OSD.
+Si el OCR posterior es insuficiente (sin texto útil o menos de tres palabras),
+se probarán 0/90/180/270 y se conservará de forma determinista la imagen con
+mejor evidencia OCR. El ticket inclinado aproximadamente 10 grados permanece
+como limitación conocida.
 
 No implementar inicialmente:
 

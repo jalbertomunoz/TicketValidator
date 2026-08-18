@@ -8,8 +8,7 @@ namespace TicketValidator.Application.UseCases.AnalyzeTicket;
 
 public sealed class AnalyzeTicketHandler
 {
-    private readonly IDocumentOrientationService _documentOrientationService;
-    private readonly IOcrService _ocrService;
+    private readonly IOcrOrientationService _ocrOrientationService;
     private readonly IProductClassifier _productClassifier;
     private readonly IExpenseCoherenceAnalyzer _expenseCoherenceAnalyzer;
     private readonly IVisualAnalysisService _visualAnalysisService;
@@ -18,8 +17,7 @@ public sealed class AnalyzeTicketHandler
     private readonly IAuditLogger _auditLogger;
 
     public AnalyzeTicketHandler(
-        IDocumentOrientationService documentOrientationService,
-        IOcrService ocrService,
+        IOcrOrientationService ocrOrientationService,
         IProductClassifier productClassifier,
         IExpenseCoherenceAnalyzer expenseCoherenceAnalyzer,
         IVisualAnalysisService visualAnalysisService,
@@ -27,8 +25,7 @@ public sealed class AnalyzeTicketHandler
         IExpenseRuleEngine expenseRuleEngine,
         IAuditLogger auditLogger)
     {
-        _documentOrientationService = documentOrientationService;
-        _ocrService = ocrService;
+        _ocrOrientationService = ocrOrientationService;
         _productClassifier = productClassifier;
         _expenseCoherenceAnalyzer = expenseCoherenceAnalyzer;
         _visualAnalysisService = visualAnalysisService;
@@ -51,16 +48,15 @@ public sealed class AnalyzeTicketHandler
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            var orientedImage = await _documentOrientationService.OrientAsync(command.Image, cancellationToken);
-            var ocrResult = await _ocrService.ReadAsync(orientedImage, cancellationToken);
-            var visualAnalysis = await _visualAnalysisService.AnalyzeAsync(orientedImage, cancellationToken);
+            var orientedOcr = await _ocrOrientationService.ReadBestAsync(command.Image, cancellationToken);
+            var visualAnalysis = await _visualAnalysisService.AnalyzeAsync(orientedOcr.Image, cancellationToken);
             var classifiedProducts = await _productClassifier.ClassifyAsync(visualAnalysis.Products, cancellationToken);
             var finalTicket = CreateVisualTicket(visualAnalysis, classifiedProducts);
             var coherence = await _expenseCoherenceAnalyzer.AnalyzeAsync(
                 finalTicket,
                 command.ExpenseType,
                 cancellationToken);
-            var verificationResult = _ticketVerificationService.Verify(ocrResult, visualAnalysis);
+            var verificationResult = _ticketVerificationService.Verify(orientedOcr.OcrResult, visualAnalysis);
             var decision = _expenseRuleEngine.Evaluate(
                 finalTicket,
                 verificationResult.Verification,
@@ -79,7 +75,7 @@ public sealed class AnalyzeTicketHandler
             return new AnalyzeTicketResult
             {
                 AnalysisId = analysisId,
-                OcrRawText = ocrResult.RawText,
+                OcrRawText = orientedOcr.OcrResult.RawText,
                 Ticket = finalTicket,
                 Verification = verificationResult.Verification,
                 Decision = decision

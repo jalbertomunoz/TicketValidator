@@ -59,8 +59,7 @@ public sealed class AnalyzeTicketPipelineIntegrationTests
     }
 
     private static AnalyzeTicketHandler CreateHandler(PipelineScenario scenario, string directoryPath) => new(
-        new ScenarioDocumentOrientationService(),
-        new ScenarioOcrService(scenario),
+        new ScenarioOcrOrientationService(scenario),
         new ScenarioProductClassifier(),
         new ScenarioExpenseCoherenceAnalyzer(scenario),
         new ScenarioVisualAnalysisService(scenario),

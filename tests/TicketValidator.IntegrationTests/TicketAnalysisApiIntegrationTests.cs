@@ -71,16 +71,14 @@ public sealed class TicketAnalysisApiIntegrationTests
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<ChatClient>();
-                services.RemoveAll<IDocumentOrientationService>();
-                services.RemoveAll<IOcrService>();
+                services.RemoveAll<IOcrOrientationService>();
                 services.RemoveAll<IProductClassifier>();
                 services.RemoveAll<IExpenseCoherenceAnalyzer>();
                 services.RemoveAll<IVisualAnalysisService>();
                 services.RemoveAll<IAuditLogger>();
 
                 services.AddSingleton(scenario);
-                services.AddSingleton<IDocumentOrientationService, ScenarioDocumentOrientationService>();
-                services.AddSingleton<IOcrService, ScenarioOcrService>();
+                services.AddSingleton<IOcrOrientationService, ScenarioOcrOrientationService>();
                 services.AddSingleton<IProductClassifier, ScenarioProductClassifier>();
                 services.AddSingleton<IExpenseCoherenceAnalyzer, ScenarioExpenseCoherenceAnalyzer>();
                 services.AddSingleton<IVisualAnalysisService, ScenarioVisualAnalysisService>();

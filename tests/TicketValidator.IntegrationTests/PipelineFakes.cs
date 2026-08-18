@@ -103,17 +103,12 @@ internal static class PipelineScenarios
     };
 }
 
-internal sealed class ScenarioDocumentOrientationService : IDocumentOrientationService
+internal sealed class ScenarioOcrOrientationService(PipelineScenario scenario) : IOcrOrientationService
 {
-    public Task<byte[]> OrientAsync(byte[] image, CancellationToken cancellationToken = default) => Task.FromResult(image);
-}
-
-internal sealed class ScenarioOcrService(PipelineScenario scenario) : IOcrService
-{
-    public Task<OcrResult> ReadAsync(byte[] image, CancellationToken cancellationToken = default) =>
+    public Task<OcrOrientationResult> ReadBestAsync(byte[] image, CancellationToken cancellationToken = default) =>
         scenario.OcrException is null
-            ? Task.FromResult(scenario.OcrResult)
-            : Task.FromException<OcrResult>(scenario.OcrException);
+            ? Task.FromResult(new OcrOrientationResult { Image = image, OcrResult = scenario.OcrResult })
+            : Task.FromException<OcrOrientationResult>(scenario.OcrException);
 }
 
 internal sealed class ScenarioProductClassifier : IProductClassifier
