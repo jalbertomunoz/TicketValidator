@@ -13,9 +13,9 @@ El servicio recibe:
 
 A partir de esta información:
 
-1. Obtiene evidencia textual mediante OCR.
-2. Interpreta la información mediante Inteligencia Artificial.
-3. Contrasta los campos críticos.
+1. Corrige la orientación y obtiene evidencia textual mediante OCR.
+2. Extrae la información estructurada directamente de la imagen mediante IA.
+3. Contrasta fecha y total entre la lectura visual y OCR.
 4. Analiza indicios visuales de manipulación.
 5. Aplica reglas de negocio deterministas.
 6. Devuelve una decisión estructurada y explicable.
@@ -23,19 +23,17 @@ A partir de esta información:
 El principio fundamental del sistema es:
 
 ```text
-IA visual = fuente principal de lectura
+IA visual = fuente estructurada principal
 
-OCR = fuente independiente de contraste
-
-IA sobre OCR = extracción y estructuración auxiliar
+OCR = legibilidad, RawText, fecha, total, contraste y diagnóstico
 
 Código = decisión
 ```
 
 Esta política se ajustó tras validación experimental del MVP con tickets reales:
-GPT-4.1 visual leyó fecha y total correctamente en documentos donde Tesseract
-perdió información. El código conserva ambas evidencias y decide de forma
-determinista.
+GPT-4.1 visual estructuró documentos donde Tesseract perdió información. El
+código conserva OCR como evidencia independiente de fecha y total y decide de
+forma determinista.
 
 ---
 
@@ -282,28 +280,19 @@ Imagen
   ↓
 Validación de entrada
   ↓
-Orientación / rotación
+Tesseract OSD y OCR inicial
   ↓
-Tesseract OCR
+Fallback 0°/90°/180°/270° si falta texto, palabras, fecha o total
   ↓
-Conservación de evidencia OCR
+Selección conjunta de imagen y OcrResult
   ↓
-┌────────────────────────────┐
-│                            │
-▼                            ▼
-Extracción IA        Análisis visual IA
-│                            │
-└─────────────┬──────────────┘
-              ↓
-      Verificación OCR / IA
-              ↓
-       Motor de reglas
-              ↓
-          Decisión
-              ↓
-          Auditoría
-              ↓
-       Respuesta REST
+Lectura visual estructurada de la misma imagen
+  ↓
+Clasificación de productos y análisis de coherencia
+  ↓
+Verificación OCR/visual de fecha y total
+  ↓
+Motor de reglas, auditoría y respuesta REST
 ```
 
 ---
@@ -547,9 +536,12 @@ Cuando Tesseract proporcione información de confianza, el sistema deberá poder
 
 ---
 
-## RF-009 — Extracción IA
+## RF-009 — Lectura visual estructurada
 
-El sistema deberá utilizar GPT-4.1 para transformar el texto OCR en una representación estructurada.
+El sistema deberá utilizar GPT-4.1 visual sobre la imagen seleccionada para
+extraer tipo de documento, proveedor, CIF/NIF, dirección, número, fecha, hora,
+total, IVA, productos e indicios de manipulación. El texto OCR no se utilizará
+para completar estos campos.
 
 ---
 
@@ -598,6 +590,9 @@ REVIEW_REQUIRED
 ERR_SIN_CIF
 ```
 
+La ausencia de CIF/NIF no bloquea por sí sola `Parking`, `Highway`, `Taxi`,
+`Fuel`, `Accommodation`, `Other` ni `Unknown`.
+
 ---
 
 ## RF-014 — Número de documento
@@ -633,10 +628,10 @@ El sistema deberá intentar determinar el importe total finalmente pagado.
 Cuando exista información suficiente, el sistema deberá intentar separar:
 
 ```text
-codigoPostal
-localidad
-provincia
-restoDireccion
+street
+city
+postalCode
+country
 ```
 
 ---
@@ -648,21 +643,25 @@ El sistema deberá intentar extraer todos los desgloses de IVA existentes.
 Por cada elemento:
 
 ```text
-baseImponible
-tipo
-cuota
+rate
+taxableAmount
+amount
 ```
 
 ---
 
 ## RF-020 — Productos
 
-El sistema deberá intentar extraer las líneas correspondientes a:
+La IA visual deberá intentar extraer directamente de la imagen las líneas
+correspondientes a:
 
 - Productos.
 - Artículos.
 - Consumiciones.
 - Servicios facturados.
+
+Estas líneas se enviarán posteriormente al clasificador de productos y al
+analizador de coherencia. OCR no es fuente de productos.
 
 ---
 
@@ -1007,7 +1006,8 @@ cuando no exista una regla de mayor prioridad.
 
 `APPROVED / OK` requiere `DateMatch = true` y `TotalMatch = true`. La IA visual
 sigue siendo la lectura principal de ambos valores, pero OCR debe corroborarlos
-para aprobar automáticamente.
+para aprobar automáticamente. Además, el documento no podrá estar clasificado
+visualmente como `NO_DOCUMENTO` ni incumplir otra regla de mayor prioridad.
 
 ---
 
@@ -1201,20 +1201,21 @@ La ausencia de indicios de manipulación no significa que el documento haya sido
 El motor de reglas utilizará inicialmente la siguiente prioridad:
 
 ```text
-1. ERR_NO_DOCUMENTO, solo ante una clasificación visual explícita `NO_DOCUMENTO` sin evidencia OCR contradictoria de ticket o factura
-2. ERR_NO_LEGIBLE, solo sin OCR y sin lectura visual suficiente
-3. ERR_DOCUMENTO_MANIPULADO
-4. ERR_BEBIDA_ALCOHOLICA
-5. ERR_TIPO_GASTO_INCOHERENTE
-6. DATE_MISMATCH
-7. TOTAL_MISMATCH
-8. ERR_SIN_TOTAL, solo sin total visual ni OCR
-9. ERR_SIN_FECHA, solo sin fecha visual ni OCR
-10. OCR_LOW_CONFIDENCE, con un campo crítico exclusivo de OCR u OCR nulo con evidencia visual suficiente
-11. ERR_FECHA_FUTURA, solo con DateMatch = true
-12. ERR_FECHA_ANTIGUA, solo con DateMatch = true y año anterior
-13. ERR_SIN_CIF, para Meals/Diet/Breakfast/Lunch/Dinner/Material sin TaxId
-14. OK
+1. DOCUMENT_TYPE_MISMATCH, ante una clasificación visual `NO_DOCUMENTO` y un `TicketData` marcado como ticket o factura
+2. ERR_NO_DOCUMENTO, ante una clasificación visual explícita `NO_DOCUMENTO`
+3. ERR_NO_LEGIBLE, solo sin OCR y sin lectura visual suficiente
+4. ERR_DOCUMENTO_MANIPULADO
+5. ERR_BEBIDA_ALCOHOLICA
+6. ERR_TIPO_GASTO_INCOHERENTE
+7. DATE_MISMATCH
+8. TOTAL_MISMATCH
+9. ERR_SIN_TOTAL, solo sin total visual ni OCR
+10. ERR_SIN_FECHA, solo sin fecha visual ni OCR
+11. OCR_LOW_CONFIDENCE, con un campo crítico exclusivo de OCR u OCR nulo con evidencia visual suficiente
+12. ERR_FECHA_FUTURA, solo con DateMatch = true
+13. ERR_FECHA_ANTIGUA, solo con DateMatch = true y año anterior
+14. ERR_SIN_CIF, para Meals/Diet/Breakfast/Lunch/Dinner/Material sin TaxId
+15. OK
 ```
 
 ---
@@ -1264,6 +1265,7 @@ ERR_TIPO_GASTO_INCOHERENTE
 ERR_SIN_TOTAL
 ERR_SIN_FECHA
 
+DOCUMENT_TYPE_MISMATCH
 DATE_MISMATCH
 TOTAL_MISMATCH
 OCR_LOW_CONFIDENCE
@@ -1498,7 +1500,8 @@ La API deberá poder ejecutarse mediante Docker.
 
 ## RNF-011 — Render
 
-Render será el destino inicial de despliegue.
+Render es el destino final de despliegue público mediante Docker y la rama
+`main`.
 
 ---
 
@@ -1512,7 +1515,7 @@ Las claves de OpenAI no deberán almacenarse en:
 - Tests.
 - Logs.
 
-Se utilizará:
+Se utilizará `OpenAI__ApiKey` en Render. La aplicación admite también:
 
 ```text
 OPENAI_API_KEY
@@ -1835,7 +1838,8 @@ Debe permitir:
 3. Ejecutar el análisis.
 4. Consultar la respuesta JSON.
 
-Una web adicional será opcional.
+La aplicación incluye una web estática auxiliar en `/`, disponible en español,
+que consume el mismo endpoint REST y facilita la demostración.
 
 ---
 
@@ -1856,9 +1860,9 @@ Los secretos se proporcionarán mediante variables de entorno.
 
 # 26. Render
 
-Render será el proveedor objetivo de despliegue.
+El despliegue final utiliza un Render Web Service conectado a la rama `main`.
 
-Flujo previsto:
+Flujo desplegado:
 
 ```text
 GitHub
@@ -1869,6 +1873,12 @@ Docker build
    ↓
 TicketValidator.Api
 ```
+
+La clave se configura mediante `OpenAI__ApiKey` y no se incorpora al código ni
+a la imagen Docker.
+
+- Web pública: https://ticketvalidator-juo1.onrender.com
+- Swagger público: https://ticketvalidator-juo1.onrender.com/swagger
 
 ---
 
@@ -1884,8 +1894,8 @@ El MVP se considerará completado cuando:
 - Se ejecute la corrección de orientación antes del OCR.
 - Tesseract extraiga texto.
 - El texto OCR se conserve como evidencia.
-- GPT-4.1 pueda interpretar el contenido OCR.
-- Exista análisis visual de indicios de manipulación.
+- GPT-4.1 visual pueda extraer los datos estructurados de la imagen seleccionada.
+- Exista análisis visual de indicios de manipulación y productos.
 - Fecha y total puedan compararse entre OCR e IA.
 - Las discrepancias produzcan `REVIEW_REQUIRED`.
 - La lectura visual de fecha y total se conserve aunque OCR no obtenga esos datos.
@@ -1893,11 +1903,12 @@ El MVP se considerará completado cuando:
 - El caso `CEREZAS` no sea rechazado como alcohol.
 - Una cerveza real pueda provocar rechazo.
 - Existan pruebas xUnit representativas.
+- La suite automatizada finalice con sus 233 tests correctos.
 - Los tests de reglas no necesiten OpenAI real.
 - Existan logs técnicos.
 - No se almacenen imágenes como requisito del MVP.
 - La API pueda ejecutarse mediante Docker.
-- El proyecto quede preparado para desplegarse en Render.
+- El proyecto esté desplegado públicamente en Render mediante Docker.
 - El código esté disponible en GitHub.
 - El repositorio incluya README y documentación técnica.
 
@@ -1950,13 +1961,10 @@ Manipulación:
 Análisis visual
 
 IA visual:
-Fuente principal de lectura de fecha y total
+Fuente estructurada principal del documento y de sus productos
 
 OCR:
-Fuente independiente de contraste
-
-IA sobre OCR:
-Extracción y estructuración auxiliar
+Legibilidad, RawText, fecha, total, contraste y diagnóstico
 
 Decisión:
 Motor de reglas en código
@@ -1965,7 +1973,7 @@ Discrepancias:
 REVIEW_REQUIRED
 
 Web demo:
-Opcional
+Incluida en español y desplegada en la ruta raíz
 ```
 
 ---
@@ -2004,6 +2012,9 @@ Una vez completado el MVP se podrán estudiar:
 - Calibración avanzada de Tesseract.
 - Diccionarios adicionales.
 - Reglas más completas por tipo de gasto.
+- Aplicación móvil para captura guiada.
+- Detección de bordes del ticket.
+- Optimización del consumo y coste de IA.
 - C2PA.
 - EXIF.
 - Persistencia de auditoría.
@@ -2023,11 +2034,9 @@ Estas mejoras no son necesarias para completar el MVP.
 Ante cualquier duda durante la implementación deberá mantenerse el siguiente criterio:
 
 ```text
-IA visual = fuente principal de lectura
+IA visual = fuente estructurada principal
 
-OCR = fuente independiente de contraste
-
-IA sobre OCR = extracción y estructuración auxiliar
+OCR = legibilidad, RawText, fecha, total, contraste y diagnóstico
 
 Código = decisión
 ```

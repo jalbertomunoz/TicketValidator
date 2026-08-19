@@ -39,11 +39,9 @@ Respuesta REST
 Principio fundamental:
 
 ```text
-IA visual = fuente principal de lectura
+IA visual = fuente estructurada principal
 
-OCR = fuente independiente de contraste
-
-IA sobre OCR = extracción y estructuración auxiliar
+OCR = legibilidad, RawText, fecha, total, contraste y diagnóstico
 
 Código = decisión
 ```
@@ -237,9 +235,11 @@ La arquitectura contempla inicialmente las siguientes abstracciones:
 
 ```text
 IOcrService
-IAiTicketExtractor
+IOcrOrientationService
 IVisualAnalysisService
+IProductClassifier
 IDocumentOrientationService
+IExpenseCoherenceAnalyzer
 ITicketVerificationService
 IExpenseRuleEngine
 IAuditLogger
@@ -268,9 +268,9 @@ Flujo esperado:
 3. Corregir orientación si procede.
 4. Ejecutar OCR.
 5. Conservar evidencia OCR.
-6. Ejecutar extracción estructurada mediante IA.
-7. Ejecutar análisis visual de manipulación.
-8. Comparar OCR e IA en campos críticos.
+6. Ejecutar lectura visual estructurada sobre la imagen seleccionada.
+7. Clasificar los productos visuales y analizar su coherencia con el gasto.
+8. Comparar OCR e IA visual en fecha y total.
 9. Aplicar reglas de negocio.
 10. Generar decisión.
 11. Registrar información técnica.
@@ -336,11 +336,11 @@ Los prompts deberán estar separados por función.
 Inicialmente:
 
 ```text
-TicketExtractionPrompt
-
 ProductClassificationPrompt
 
 VisualAnalysisPrompt
+
+ExpenseCoherencePrompt
 ```
 
 ---
@@ -533,6 +533,7 @@ ERR_BEBIDA_ALCOHOLICA
 ERR_TIPO_GASTO_INCOHERENTE
 ERR_SIN_TOTAL
 ERR_SIN_FECHA
+DOCUMENT_TYPE_MISMATCH
 DATE_MISMATCH
 TOTAL_MISMATCH
 OCR_LOW_CONFIDENCE
@@ -576,20 +577,21 @@ Una discrepancia no significa automáticamente que el ticket sea inválido.
 La prioridad inicial de las reglas es:
 
 ```text
-1. ERR_NO_DOCUMENTO
-2. ERR_NO_LEGIBLE, solo sin OCR y sin lectura visual suficiente
-3. ERR_DOCUMENTO_MANIPULADO
-4. ERR_BEBIDA_ALCOHOLICA
-5. ERR_TIPO_GASTO_INCOHERENTE
-6. DATE_MISMATCH
-7. TOTAL_MISMATCH
-8. ERR_SIN_TOTAL, solo sin total visual ni OCR
-9. ERR_SIN_FECHA, solo sin fecha visual ni OCR
-10. OCR_LOW_CONFIDENCE, con un campo crítico exclusivo de OCR o OCR nulo con evidencia visual suficiente
-11. ERR_FECHA_FUTURA, solo con DateMatch = true
-12. ERR_FECHA_ANTIGUA, solo con DateMatch = true y año anterior
-13. ERR_SIN_CIF, para Meals/Diet/Breakfast/Lunch/Dinner/Material sin TaxId
-14. OK
+1. DOCUMENT_TYPE_MISMATCH, ante `NotDocument` visual y `TicketData` marcado como ticket o factura
+2. ERR_NO_DOCUMENTO
+3. ERR_NO_LEGIBLE, solo sin OCR y sin lectura visual suficiente
+4. ERR_DOCUMENTO_MANIPULADO
+5. ERR_BEBIDA_ALCOHOLICA
+6. ERR_TIPO_GASTO_INCOHERENTE
+7. DATE_MISMATCH
+8. TOTAL_MISMATCH
+9. ERR_SIN_TOTAL, solo sin total visual ni OCR
+10. ERR_SIN_FECHA, solo sin fecha visual ni OCR
+11. OCR_LOW_CONFIDENCE, con un campo crítico exclusivo de OCR o OCR nulo con evidencia visual suficiente
+12. ERR_FECHA_FUTURA, solo con DateMatch = true
+13. ERR_FECHA_ANTIGUA, solo con DateMatch = true y año anterior
+14. ERR_SIN_CIF, para Meals/Diet/Breakfast/Lunch/Dinner/Material sin TaxId
+15. OK
 ```
 
 `REVIEW_REQUIRED` se utiliza para discrepancias cuando no existe una regla de mayor prioridad que determine un rechazo.

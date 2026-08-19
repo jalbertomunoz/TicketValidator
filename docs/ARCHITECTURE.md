@@ -14,18 +14,17 @@ La arquitectura busca cumplir cuatro objetivos principales:
 El sistema sigue como principio fundamental:
 
 ```text
-IA visual = fuente principal de lectura
+IA visual = fuente estructurada principal
 
-OCR = fuente independiente de contraste
-
-IA sobre OCR = extracción y estructuración auxiliar
+OCR = legibilidad, RawText, fecha, total, contraste y diagnóstico
 
 Código = decisión
 ```
 
 La política se ajustó tras pruebas experimentales con tickets reales: la lectura
-visual de GPT-4.1 resultó más fiable para fecha y total cuando Tesseract pierde
-información. El código conserva ambas fuentes y toma la decisión final.
+visual de GPT-4.1 resultó más fiable para estructurar el documento cuando
+Tesseract pierde información. El código conserva OCR como fuente independiente
+para fecha y total y toma la decisión final.
 
 ---
 
@@ -225,14 +224,15 @@ Campos previstos:
 
 ```text
 documentType
-companyName
-companyTaxId
+establishmentName
+establishmentType
+taxId
 invoiceNumber
 date
 time
 total
 address
-vat
+vatDetails
 products
 ```
 
@@ -241,8 +241,13 @@ tipo de documento, emisor, CIF, número, hora, dirección, IVA, productos, fecha
 total. OCR solo aporta evidencia independiente para contrastar fecha y total,
 determinar legibilidad y facilitar diagnóstico; no completa campos visuales
 ausentes.
-`APPROVED` requiere `DateMatch = true` y `TotalMatch = true`, por lo que los dos
-campos críticos deben estar corroborados por OCR e IA visual.
+Las líneas de producto se extraen exclusivamente de la imagen. Después,
+`IProductClassifier` conserva `concept`, `normalizedText` y `amount` y añade
+`category` e `isAlcohol`. Los productos clasificados se incorporan a
+`TicketData` y se envían a `IExpenseCoherenceAnalyzer`.
+`APPROVED` requiere un documento no clasificado como `NotDocument`,
+`DateMatch = true` y `TotalMatch = true`, por lo que los dos campos críticos
+deben estar corroborados por OCR e IA visual.
 Con una fecha corroborada, el motor revisa anomalías temporales preventivas:
 futuro respecto a la fecha UTC actual o año anterior, sin rechazo automático.
 El tipo de documento también procede de la lectura visual.
@@ -352,12 +357,13 @@ TicketValidator.Application/
 │
 ├── Abstractions/
 │   ├── IOcrService.cs
-│   ├── IAiTicketExtractor.cs
-│   ├── IVisualAnalysisService.cs
+│   ├── IOcrOrientationService.cs
 │   ├── IDocumentOrientationService.cs
+│   ├── IVisualAnalysisService.cs
+│   ├── IProductClassifier.cs
+│   ├── IExpenseCoherenceAnalyzer.cs
 │   ├── ITicketVerificationService.cs
 │   ├── IExpenseRuleEngine.cs
-│   ├── IExpenseCoherenceAnalyzer.cs
 │   └── IAuditLogger.cs
 │
 ├── UseCases/
@@ -369,12 +375,13 @@ TicketValidator.Application/
 ├── DTOs/
 │   ├── OcrResult.cs
 │   ├── OcrWord.cs
-│   ├── AiTicketExtraction.cs
+│   ├── OcrOrientationResult.cs
 │   ├── VisualAnalysisResult.cs
 │   ├── ExpenseCoherenceResult.cs
 │   └── VerificationResult.cs
 │
 └── Services/
+    ├── OcrEvidenceAnalyzer.cs
     ├── TicketVerificationService.cs
     └── ExpenseRuleEngine.cs
 ```
@@ -387,12 +394,13 @@ Inicialmente se contemplan:
 
 ```text
 IOcrService
-IAiTicketExtractor
-IVisualAnalysisService
+IOcrOrientationService
 IDocumentOrientationService
+IVisualAnalysisService
+IProductClassifier
+IExpenseCoherenceAnalyzer
 ITicketVerificationService
 IExpenseRuleEngine
-IExpenseCoherenceAnalyzer
 IAuditLogger
 ```
 
@@ -432,42 +440,32 @@ No se fija inicialmente ningún umbral de confianza.
 
 Los umbrales se determinarán posteriormente mediante pruebas con tickets reales.
 
+`IOcrService` aporta exclusivamente `RawText`, palabras y confianza para
+legibilidad, orientación, diagnóstico y extracción determinista de fecha y
+total. No construye `TicketData` ni completa proveedor, CIF, dirección, número,
+hora, IVA, productos o tipo de documento.
+
 ---
 
-## 6.5 IAiTicketExtractor
+## 6.5 Extracción OCR residual
 
-Responsable de transformar el texto OCR en una representación estructurada.
-
-Entrada principal:
-
-```text
-texto OCR
-```
-
-Salida:
-
-```text
-AiTicketExtraction
-```
-
-La IA deberá devolver `null` cuando un dato no pueda identificarse con suficiente seguridad.
-
-No debe completar datos ausentes.
-Sus fechas y totales estructurados no constituyen una segunda fuente independiente para la verificación.
-
-Tras centralizar la lectura semántica en `IVisualAnalysisService`,
-`OpenAiTicketExtractor` permanece registrado y cubierto de forma aislada, pero
-`AnalyzeTicketHandler` ya no lo invoca ni utiliza su resultado. Es deuda técnica
-pendiente de definir una responsabilidad auxiliar concreta o retirarlo en un
-cambio de alcance separado.
+La extracción estructurada mediante IA sobre texto OCR no forma parte del flujo
+activo. `IAiTicketExtractor`, `AiTicketExtraction` y `OpenAiTicketExtractor`
+permanecen como componentes residuales pendientes de retirada, pero
+`AnalyzeTicketHandler` no los invoca ni utiliza sus resultados. OCR nunca
+completa campos ausentes de la lectura visual.
 
 ---
 
 ## 6.6 IVisualAnalysisService
 
-Responsable de la lectura visual principal del MVP.
+Responsable de la lectura estructurada principal del MVP.
 
-Clasifica explícitamente la imagen como ticket, factura, no documento o desconocida. Además de los indicios de manipulación, extrae directamente los datos del emisor, CIF, número, hora, dirección, IVA, líneas facturadas, fecha y total. Fecha y total se contrastan con OCR. `Unknown` no equivale a `NotDocument`.
+Clasifica explícitamente la imagen como ticket, factura, no documento o
+desconocida. Extrae directamente tipo de documento, proveedor/emisor, tipo de
+establecimiento, CIF/NIF/VAT del proveedor, dirección del proveedor, número,
+fecha, hora, total, IVA, líneas facturadas e indicios de manipulación. Solo fecha
+y total se contrastan con OCR. `Unknown` no equivale a `NotDocument`.
 
 Analizará posibles indicios de:
 
@@ -585,6 +583,11 @@ Responsable de ejecutar las reglas y determinar el resultado final.
 
 La coherencia semántica se obtiene previamente mediante `IExpenseCoherenceAnalyzer`. El motor recibe esa señal y decide de forma determinista `ERR_TIPO_GASTO_INCOHERENTE` solo cuando la mayoría de la compra es claramente incoherente.
 
+El flujo de productos es único: `IVisualAnalysisService` extrae las líneas,
+`IProductClassifier` añade categoría y alcohol,
+`IExpenseCoherenceAnalyzer` evalúa el conjunto y `IExpenseRuleEngine` toma la
+decisión final junto con las demás reglas.
+
 La IA nunca selecciona directamente:
 
 ```text
@@ -622,40 +625,29 @@ Su responsabilidad es coordinar el proceso completo.
 ## 7.1 Flujo del caso de uso
 
 ```text
-AnalyzeTicket
-     │
-     ▼
-Validar entrada
-     │
-     ▼
-Orientar imagen
-     │
-     ▼
-Ejecutar OCR
-     │
-     ▼
-Conservar evidencia OCR
-     │
-     ├───────────────────────────┐
-     │                           │
-     ▼                           ▼
-Extracción IA             Análisis visual IA
-     │                           │
-     └────────────┬──────────────┘
-                  ▼
-             Verificación
-                  │
-                  ▼
-            Motor de reglas
-                  │
-                  ▼
-              Decisión
-                  │
-                  ▼
-              Auditoría
-                  │
-                  ▼
-             Resultado
+Imagen
+  ↓
+Validación
+  ↓
+Tesseract OSD
+  ↓
+OCR inicial
+  ↓
+Si falta evidencia crítica: fallback 0°/90°/180°/270°
+  ↓
+Imagen seleccionada + OcrResult seleccionado
+  ↓
+IA visual estructurada sobre la misma imagen
+  ↓
+ProductClassifier
+  ↓
+TicketData + ExpenseCoherenceAnalyzer
+  ↓
+Verificación OCR/visual de fecha y total
+  ↓
+ExpenseRuleEngine
+  ↓
+Decisión, auditoría y respuesta
 ```
 
 ---
@@ -717,24 +709,13 @@ OcrResult
 
 ---
 
-## 8.4 Extracción mediante IA
+## 8.4 Evidencia OCR
 
-El texto OCR se envía a:
-
-```text
-IAiTicketExtractor
-```
-
-implementado por:
-
-```text
-OpenAiTicketExtractor
-```
-
-La entrada de esta operación será principalmente texto.
-
-Esta llamada no debe realizar análisis visual del documento.
-Su fecha y total estructurados no se usan como segunda fuente de verificación.
+El texto OCR no alimenta un extractor estructurado dentro del flujo activo. Se
+conserva como `RawText` y `OcrEvidenceAnalyzer` obtiene de forma determinista
+`OcrDate` y `OcrTotal`. Esta evidencia se utiliza para legibilidad, selección de
+orientación, corroboración de fecha y total y diagnóstico; nunca completa
+`TicketData`.
 
 ---
 
@@ -753,8 +734,9 @@ OpenAiVisualAnalysisService
 ```
 
 Esta operación analiza indicios visibles de manipulación y extrae directamente
-los datos semánticos, productos, fecha y total como fuente principal. Fecha y
-total se contrastan con OCR.
+tipo de documento, proveedor, CIF/NIF, dirección, número, fecha, hora, total,
+IVA y productos como fuente principal. Sus productos se envían a
+`IProductClassifier`; solo fecha y total se contrastan con OCR.
 
 No aplica reglas de gasto ni decide el estado final.
 
@@ -770,28 +752,17 @@ La infraestructura dispondrá de prompts separados.
 Infrastructure/
 └── AI/
     └── Prompts/
-        ├── TicketExtractionPrompt.cs
+        ├── VisualAnalysisPrompt.cs
         ├── ProductClassificationPrompt.cs
-        └── VisualAnalysisPrompt.cs
+        └── ExpenseCoherencePrompt.cs
 ```
 
 ---
 
-## 9.1 TicketExtractionPrompt
+## 9.1 VisualAnalysisPrompt
 
-Responsable de:
-
-- Extraer empresa.
-- CIF.
-- Número de ticket o factura.
-- Fecha.
-- Hora.
-- Total.
-- Dirección.
-- IVA.
-- Líneas de productos.
-
-Trabaja principalmente sobre texto OCR.
+Responsable de la lectura visual estructurada y de los indicios de manipulación.
+No clasifica semánticamente los productos ni decide la aceptación.
 
 ---
 
@@ -817,12 +788,10 @@ La clasificación no puede modificar el texto original.
 
 ---
 
-## 9.3 VisualAnalysisPrompt
+## 9.3 ExpenseCoherencePrompt
 
-Responsable de la lectura visual principal de datos semánticos, productos, fecha,
-total e indicios de manipulación.
-
-No debe decidir la aceptación del ticket.
+Responsable de evaluar los productos ya clasificados frente al tipo de gasto. No
+aplica estados, códigos ni prioridades.
 
 ---
 
@@ -846,15 +815,18 @@ TicketValidator.Infrastructure/
 │
 ├── AI/
 │   ├── OpenAiOptions.cs
-│   ├── OpenAiTicketExtractor.cs
 │   ├── OpenAiVisualAnalysisService.cs
+│   ├── OpenAiProductClassifier.cs
+│   ├── OpenAiExpenseCoherenceAnalyzer.cs
 │   └── Prompts/
-│       ├── TicketExtractionPrompt.cs
+│       ├── VisualAnalysisPrompt.cs
 │       ├── ProductClassificationPrompt.cs
-│       └── VisualAnalysisPrompt.cs
+│       └── ExpenseCoherencePrompt.cs
 │
 ├── ImageProcessing/
-│   └── TesseractDocumentOrientationService.cs
+│   ├── TesseractDocumentOrientationService.cs
+│   ├── FallbackOcrOrientationService.cs
+│   └── OrthogonalImageRotation.cs
 │
 ├── Logging/
 │   └── FileAuditLogger.cs
@@ -1019,8 +991,9 @@ La respuesta tendrá conceptualmente esta estructura:
   "message": null,
   "ticket": {
     "documentType": "TICKET",
-    "companyName": "Restaurante Ejemplo",
-    "companyTaxId": "B12345678",
+    "establishmentName": "Restaurante Ejemplo",
+    "establishmentType": "Restaurante",
+    "taxId": "B12345678",
     "invoiceNumber": null,
     "date": "14/08/2026",
     "time": "14:30",
@@ -1031,7 +1004,8 @@ La respuesta tendrá conceptualmente esta estructura:
     "ocrReadable": true,
     "dateMatch": true,
     "totalMatch": true,
-    "manipulationDetected": false
+    "manipulationDetected": false,
+    "ocrRawText": "..."
   }
 }
 ```
@@ -1063,6 +1037,7 @@ ERR_TIPO_GASTO_INCOHERENTE
 ERR_SIN_TOTAL
 ERR_SIN_FECHA
 
+DOCUMENT_TYPE_MISMATCH
 DATE_MISMATCH
 TOTAL_MISMATCH
 OCR_LOW_CONFIDENCE
@@ -1166,20 +1141,21 @@ El motor de reglas debe ser determinista.
 Orden inicial de prioridad:
 
 ```text
-1. ERR_NO_DOCUMENTO (solo ante `VisualDocumentType = NotDocument` y sin evidencia OCR contradictoria de ticket o factura)
-2. ERR_NO_LEGIBLE, solo sin OCR y sin lectura visual suficiente
-3. ERR_DOCUMENTO_MANIPULADO
-4. ERR_BEBIDA_ALCOHOLICA
-5. ERR_TIPO_GASTO_INCOHERENTE
-6. DATE_MISMATCH
-7. TOTAL_MISMATCH
-8. ERR_SIN_TOTAL, solo sin total visual ni OCR
-9. ERR_SIN_FECHA, solo sin fecha visual ni OCR
-10. OCR_LOW_CONFIDENCE, con un campo crítico solo OCR o OCR nulo con evidencia visual suficiente
-11. ERR_FECHA_FUTURA, solo con DateMatch = true
-12. ERR_FECHA_ANTIGUA, solo con DateMatch = true y año anterior
-13. ERR_SIN_CIF, para Meals/Diet/Breakfast/Lunch/Dinner/Material sin TaxId
-14. OK
+1. DOCUMENT_TYPE_MISMATCH, ante una clasificación visual `NotDocument` y un `TicketData` marcado como ticket o factura
+2. ERR_NO_DOCUMENTO, ante `VisualDocumentType = NotDocument`
+3. ERR_NO_LEGIBLE, solo sin OCR y sin lectura visual suficiente
+4. ERR_DOCUMENTO_MANIPULADO
+5. ERR_BEBIDA_ALCOHOLICA
+6. ERR_TIPO_GASTO_INCOHERENTE
+7. DATE_MISMATCH
+8. TOTAL_MISMATCH
+9. ERR_SIN_TOTAL, solo sin total visual ni OCR
+10. ERR_SIN_FECHA, solo sin fecha visual ni OCR
+11. OCR_LOW_CONFIDENCE, con un campo crítico solo OCR o OCR nulo con evidencia visual suficiente
+12. ERR_FECHA_FUTURA, solo con DateMatch = true
+13. ERR_FECHA_ANTIGUA, solo con DateMatch = true y año anterior
+14. ERR_SIN_CIF, para Meals/Diet/Breakfast/Lunch/Dinner/Material sin TaxId
+15. OK
 ```
 
 `REVIEW_REQUIRED` se utilizará para discrepancias donde no exista una causa de rechazo de prioridad superior.
@@ -1295,6 +1271,9 @@ Casos previstos:
 
 Las llamadas reales a OpenAI no deberán formar parte de la ejecución habitual de tests.
 
+La suite final consta de 233 tests correctos entre pruebas unitarias y de
+integración.
+
 ---
 
 # 24. Tickets de prueba
@@ -1328,7 +1307,8 @@ Permitirá:
 3. Ejecutar el análisis.
 4. Consultar el JSON obtenido.
 
-Una aplicación web adicional será opcional.
+La aplicación incluye además una web estática auxiliar en `/`, disponible en
+español, que consume el mismo endpoint REST y facilita la demostración.
 
 ---
 
@@ -1349,9 +1329,8 @@ La clave de OpenAI se proporcionará mediante variable de entorno en tiempo de e
 
 # 27. Render
 
-Render será el destino inicial de despliegue.
-
-El despliegue utilizará el contenedor Docker.
+El despliegue final utiliza un Render Web Service conectado a la rama `main` y
+el contenedor Docker del repositorio.
 
 Configuración esperada:
 
@@ -1366,6 +1345,10 @@ TicketValidator.Api
 ```
 
 Los secretos deberán configurarse en Render mediante variables de entorno.
+La clave se configura como `OpenAI__ApiKey`.
+
+- Web pública: https://ticketvalidator-juo1.onrender.com
+- Swagger público: https://ticketvalidator-juo1.onrender.com/swagger
 
 ---
 
@@ -1381,8 +1364,11 @@ Ejemplo:
 TesseractOcrService
 → OCR
 
-OpenAiTicketExtractor
-→ extracción IA
+OpenAiVisualAnalysisService
+→ lectura visual estructurada
+
+OpenAiProductClassifier
+→ clasificación de productos
 
 TicketVerificationService
 → comparación
@@ -1440,7 +1426,7 @@ Nunca deben crear directamente:
 
 ```csharp
 new TesseractOcrService();
-new OpenAiTicketExtractor();
+new OpenAiVisualAnalysisService();
 ```
 
 La composición de dependencias se realizará mediante la inyección de dependencias de ASP.NET Core.
@@ -1491,7 +1477,9 @@ Quedan fuera de la arquitectura inicial:
 - Autenticación.
 - Métricas avanzadas.
 - Observabilidad.
-- Frontend completo.
+- Aplicación móvil de captura guiada.
+- Detección de bordes y recorte automático.
+- Optimización de coste y consumo de IA.
 - Calibración definitiva de confianza OCR.
 
 Estas funcionalidades podrán incorporarse posteriormente sin alterar el núcleo de negocio siempre que se mantenga el desacoplamiento definido.
@@ -1519,11 +1507,9 @@ Api
 Y el principio funcional:
 
 ```text
-IA visual = fuente principal de lectura
+IA visual = fuente estructurada principal
 
-OCR = fuente independiente de contraste
-
-IA sobre OCR = extracción y estructuración auxiliar
+OCR = legibilidad, RawText, fecha, total, contraste y diagnóstico
 
 Código = decisión
 ```
