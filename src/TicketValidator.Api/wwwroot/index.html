@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TicketValidator | Demo</title>
-  <link rel="stylesheet" href="css/site.css">
+  <link rel="stylesheet" href="css/site.css?v=es-1">
 </head>
 <body>
   <header class="site-header">
@@ -43,18 +43,18 @@
 
       <label for="expense-type">Tipo de gasto</label>
       <select id="expense-type">
-        <option value="Meals">Meals</option>
-        <option value="Diet">Diet</option>
-        <option value="Breakfast">Breakfast</option>
-        <option value="Lunch" selected>Lunch</option>
-        <option value="Dinner">Dinner</option>
-        <option value="Fuel">Fuel</option>
-        <option value="Accommodation">Accommodation</option>
+        <option value="Meals">Comidas</option>
+        <option value="Diet">Dieta</option>
+        <option value="Breakfast">Desayuno</option>
+        <option value="Lunch" selected>Comida</option>
+        <option value="Dinner">Cena</option>
+        <option value="Fuel">Combustible</option>
+        <option value="Accommodation">Alojamiento</option>
         <option value="Taxi">Taxi</option>
         <option value="Parking">Parking</option>
         <option value="Material">Material</option>
-        <option value="Highway">Highway</option>
-        <option value="Other">Other</option>
+        <option value="Highway">Autopista</option>
+        <option value="Other">Otros</option>
       </select>
 
       <button id="analyze-button" type="button">Analizar ticket</button>
@@ -64,7 +64,7 @@
         <div class="result-summary">
           <span id="status-badge" class="status-badge"></span>
           <div>
-            <p class="label">Reason code</p>
+            <p class="label">Código de motivo</p>
             <p id="reason-code" class="reason-code"></p>
           </div>
         </div>
@@ -87,7 +87,24 @@
 
         <div class="result-section">
           <h3>Verificación</h3>
-          <dl id="verification-details" class="details-grid"></dl>
+          <div class="verification-grid">
+            <section class="verification-card">
+              <h4>Documento</h4>
+              <dl id="verification-document" class="details-grid"></dl>
+            </section>
+            <section class="verification-card">
+              <h4>Fecha</h4>
+              <dl id="verification-date" class="details-grid"></dl>
+            </section>
+            <section class="verification-card">
+              <h4>Total</h4>
+              <dl id="verification-total" class="details-grid"></dl>
+            </section>
+            <section class="verification-card">
+              <h4>Integridad</h4>
+              <dl id="verification-integrity" class="details-grid"></dl>
+            </section>
+          </div>
           <details class="ocr-details">
             <summary>Ver texto OCR</summary>
             <pre id="ocr-raw-text"></pre>
@@ -112,6 +129,6 @@
     </section>
   </main>
 
-  <script src="js/app.js"></script>
+  <script src="js/app.js?v=es-2"></script>
 </body>
 </html>

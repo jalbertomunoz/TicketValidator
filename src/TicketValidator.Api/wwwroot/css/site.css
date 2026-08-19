@@ -109,6 +109,10 @@ button:disabled { background: #8ba3b1; cursor: wait; }
 .details-grid dt { color: #617087; font-size: .74rem; font-weight: 700; text-transform: uppercase; }
 .details-grid dd { margin: .2rem 0 0; overflow-wrap: anywhere; }
 .secondary-details { margin-top: 1rem; }
+.verification-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.verification-card { background: #f6fafb; border: 1px solid #e0e9ed; border-radius: 10px; padding: .85rem; }
+.verification-card h4 { color: #405468; margin: 0 0 .7rem; }
+.verification-card .details-grid { gap: .65rem; grid-template-columns: 1fr; }
 
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; font-size: .86rem; width: 100%; }
@@ -126,4 +130,5 @@ pre { background: #172235; border-radius: 10px; color: #dce8ef; font-size: .78re
   .layout { grid-template-columns: 1fr; width: min(100% - 1rem, 1180px); }
   .card { border-radius: 12px; padding: 1rem; }
   .details-grid { grid-template-columns: 1fr; }
+  .verification-grid { grid-template-columns: 1fr; }
 }

@@ -12,7 +12,10 @@ const reasonCode = document.querySelector('#reason-code');
 const resultMessage = document.querySelector('#result-message');
 const ticketDetails = document.querySelector('#ticket-details');
 const addressDetails = document.querySelector('#address-details');
-const verificationDetails = document.querySelector('#verification-details');
+const verificationDocument = document.querySelector('#verification-document');
+const verificationDate = document.querySelector('#verification-date');
+const verificationTotal = document.querySelector('#verification-total');
+const verificationIntegrity = document.querySelector('#verification-integrity');
 const ocrRawText = document.querySelector('#ocr-raw-text');
 const productsBody = document.querySelector('#products-body');
 const vatSection = document.querySelector('#vat-section');
@@ -128,41 +131,47 @@ function showHttpError(status, body) {
 }
 
 function renderResult(result) {
-  statusBadge.textContent = value(result.status);
+  statusBadge.textContent = statusValue(result.status);
   statusBadge.className = `status-badge status-${String(result.status || '').toLowerCase().replaceAll('_', '-')}`;
   reasonCode.textContent = value(result.reasonCode);
   resultMessage.textContent = result.message || '';
 
   renderDetails(ticketDetails, [
-    ['Document type', result.ticket?.documentType],
-    ['Establishment name', result.ticket?.establishmentName],
-    ['Establishment type', result.ticket?.establishmentType],
-    ['Tax ID', result.ticket?.taxId],
-    ['Invoice number', result.ticket?.invoiceNumber],
-    ['Date', result.ticket?.date],
-    ['Time', result.ticket?.time],
+    ['Tipo de documento', documentTypeValue(result.ticket?.documentType)],
+    ['Establecimiento', result.ticket?.establishmentName],
+    ['Tipo de establecimiento', establishmentTypeValue(result.ticket?.establishmentType)],
+    ['CIF/NIF', result.ticket?.taxId],
+    ['Número de factura', result.ticket?.invoiceNumber],
+    ['Fecha', result.ticket?.date],
+    ['Hora', result.ticket?.time],
     ['Total', result.ticket?.total]
   ]);
 
   const address = result.ticket?.address;
   renderDetails(addressDetails, address ? [
-    ['Address', address.street],
-    ['City', address.city],
-    ['Postal code', address.postalCode],
-    ['Country', address.country]
+    ['Dirección', address.street],
+    ['Ciudad', address.city],
+    ['Código postal', address.postalCode],
+    ['País', address.country]
   ] : []);
 
-  renderDetails(verificationDetails, [
-    ['OCR readable', booleanValue(result.verification?.ocrReadable)],
-    ['Visual document type', result.verification?.visualDocumentType],
-    ['Date match', booleanValue(result.verification?.dateMatch)],
-    ['OCR date', result.verification?.ocrDate],
-    ['Visual date', result.verification?.visualDate],
-    ['Total match', booleanValue(result.verification?.totalMatch)],
-    ['OCR total', result.verification?.ocrTotal],
-    ['Visual total', result.verification?.visualTotal],
-    ['Manipulation detected', booleanValue(result.verification?.manipulationDetected)]
-  ]);
+  renderDetails(verificationDocument, [
+    ['OCR legible', booleanValue(result.verification?.ocrReadable)],
+    ['Tipo visual del documento', documentTypeValue(result.verification?.visualDocumentType)]
+  ], true);
+  renderDetails(verificationDate, [
+    ['Fecha visual', result.verification?.visualDate],
+    ['Fecha OCR', result.verification?.ocrDate],
+    ['Coincidencia de fecha', booleanValue(result.verification?.dateMatch)]
+  ], true);
+  renderDetails(verificationTotal, [
+    ['Total visual', result.verification?.visualTotal],
+    ['Total OCR', result.verification?.ocrTotal],
+    ['Coincidencia de total', booleanValue(result.verification?.totalMatch)]
+  ], true);
+  renderDetails(verificationIntegrity, [
+    ['Manipulación detectada', booleanValue(result.verification?.manipulationDetected)]
+  ], true);
   const rawText = result.verification?.ocrRawText;
   ocrRawText.textContent = rawText === undefined || rawText === null || rawText === ''
     ? 'No se ha obtenido texto OCR.'
@@ -174,14 +183,17 @@ function renderResult(result) {
   resultPanel.hidden = false;
 }
 
-function renderDetails(container, items) {
+function renderDetails(container, items, showMissing = false) {
   container.replaceChildren();
-  items.filter(([, detail]) => detail !== undefined && detail !== null && detail !== '').forEach(([label, detail]) => {
+  const renderedItems = showMissing
+    ? items
+    : items.filter(([, detail]) => detail !== undefined && detail !== null && detail !== '');
+  renderedItems.forEach(([label, detail]) => {
     const wrapper = document.createElement('div');
     const term = document.createElement('dt');
     const description = document.createElement('dd');
     term.textContent = label;
-    description.textContent = value(detail);
+    description.textContent = showMissing ? displayValue(detail) : value(detail);
     wrapper.append(term, description);
     container.append(wrapper);
   });
@@ -196,7 +208,7 @@ function renderProducts(products) {
 
   products.forEach((product) => {
     const row = document.createElement('tr');
-    [product.concept, product.normalizedText, product.amount, product.category, booleanValue(product.isAlcohol)]
+    [product.concept, product.normalizedText, product.amount, productCategoryValue(product.category), booleanValue(product.isAlcohol)]
       .forEach((item) => {
         const cell = document.createElement('td');
         cell.textContent = value(item);
@@ -234,6 +246,58 @@ function booleanValue(valueToFormat) {
   if (valueToFormat === true) return 'Sí';
   if (valueToFormat === false) return 'No';
   return 'Desconocido';
+}
+
+function statusValue(status) {
+  return {
+    APPROVED: 'APROBADO',
+    REJECTED: 'RECHAZADO',
+    REVIEW_REQUIRED: 'REVISIÓN REQUERIDA',
+    UNREADABLE: 'NO LEGIBLE',
+    PROCESSING_ERROR: 'ERROR DE PROCESAMIENTO'
+  }[status] || value(status);
+}
+
+function documentTypeValue(documentType) {
+  if (documentType === undefined || documentType === null || documentType === '') return documentType;
+
+  return {
+    TICKET: 'Ticket',
+    Receipt: 'Ticket',
+    FACTURA: 'Factura',
+    Invoice: 'Factura',
+    NO_DOCUMENTO: 'No es un documento válido',
+    NotDocument: 'No es un documento válido',
+    UNKNOWN: 'Desconocido',
+    Unknown: 'Desconocido'
+  }[documentType] || value(documentType);
+}
+
+function displayValue(valueToFormat) {
+  return valueToFormat === undefined || valueToFormat === null || valueToFormat === ''
+    ? 'Desconocido'
+    : String(valueToFormat);
+}
+
+function establishmentTypeValue(establishmentType) {
+  return {
+    Restaurant: 'Restaurante',
+    Hotel: 'Hotel',
+    Transport: 'Transporte',
+    Other: 'Otro',
+    Unknown: 'Desconocido'
+  }[establishmentType] || value(establishmentType);
+}
+
+function productCategoryValue(category) {
+  return {
+    Food: 'Comida',
+    NonAlcoholicBeverage: 'Bebida sin alcohol',
+    AlcoholicBeverage: 'Bebida alcohólica',
+    NonFood: 'No alimentario',
+    Other: 'Otro',
+    Unknown: 'Desconocido'
+  }[category] || value(category);
 }
 
 function value(valueToFormat) {

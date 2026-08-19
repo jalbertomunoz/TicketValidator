@@ -24,6 +24,23 @@ public sealed class SwaggerIntegrationTests : IClassFixture<WebApplicationFactor
         response.EnsureSuccessStatusCode();
         Assert.Contains("TicketValidator", content, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Arrastra aquí tu ticket", content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Código de motivo", content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<option value=\"Lunch\" selected>Comida</option>", content, StringComparison.Ordinal);
+        Assert.Contains("js/app.js?v=es-2", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WebDemoScript_ContainsSpanishDynamicLabels()
+    {
+        var response = await _client.GetAsync("/js/app.js?v=es-2");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.EnsureSuccessStatusCode();
+        Assert.Contains("Tipo de documento", content, StringComparison.Ordinal);
+        Assert.Contains("OCR legible", content, StringComparison.Ordinal);
+        Assert.Contains("REVISIÓN REQUERIDA", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Document type", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("OCR readable", content, StringComparison.Ordinal);
     }
 
     [Fact]
