@@ -69,7 +69,9 @@ RUN ldconfig \
     && ln -s /lib/x86_64-linux-gnu/libdl.so.2 /usr/lib/libdl.so \
     && ldconfig \
     && ln -s /usr/local/lib/libleptonica.so /app/x64/libleptonica-1.85.0.dll.so \
+    && ln -s /usr/local/lib/libleptonica.so /app/libleptonica-1.85.0.dll.so \
     && ln -s /usr/lib/x86_64-linux-gnu/libtesseract.so.5 /app/x64/libtesseract55.dll.so \
+    && ! ldd /app/libleptonica-1.85.0.dll.so | grep -q "not found" \
     && ! ldd /app/x64/libleptonica-1.85.0.dll.so | grep -q "not found" \
     && ! ldd /app/x64/libtesseract55.dll.so | grep -q "not found" \
     && mkdir /app/logs \
